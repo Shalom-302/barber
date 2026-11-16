@@ -1,0 +1,154 @@
+# Production compose for Dokploy (or any Docker host): pulls the prebuilt
+# images from GHCR, built by .github/workflows/build.yml, instead of building
+# on the server.
+#
+#   API  -> ghcr.io/<owner>/<repo>
+#   web  -> ghcr.io/<owner>/<repo>-web
+#
+# Set BARBER_IMAGE to ghcr.io/<owner>/<repo> (lowercase) in the Dokploy
+# "Environment" panel, together with the secrets below. In prod the API REFUSES
+# to boot with development defaults, so TOKEN_SECRET_KEY,
+# OPERA_LOG_ENCRYPT_SECRET_KEY, POSTGRES_PASSWORD, MINIO_SECRET_KEY,
+# PUBLIC_DOMAIN and the GOWA credentials are mandatory.
+# Generate them locally with:  kfullstack ops secrets
+#
+# Private GHCR packages: add a registry in Dokploy (ghcr.io, your GitHub user,
+# a token with read:packages) or make the packages public.
+#
+# Routing: point the public domain at service `web`, port 3000. The API, MinIO
+# and GOWA have no public route; the browser calls the web origin, which
+# proxies /admin/api/v1 to the API over the internal network.
+#
+# WhatsApp: the `gowa` service is this project's own WhatsApp gateway. Pair the
+# *system* number once: temporarily add a Dokploy domain on service `gowa`
+# (port 3000, protected by GOWA_BASIC_USER / GOWA_BASIC_PASS), scan the QR
+# code, then remove the domain. User numbers are only recipients.
+#
+# First admin, once the stack is up:
+#   docker exec -w /app <api-container> python -m backend.cli create-admin --phone +33612345678
+# then log in on the web app with that WhatsApp number.
+
+services:
+  api:
+    image: ${BARBER_IMAGE:-ghcr.io/owner/barber}:${IMAGE_TAG:-latest}
+    pull_policy: always  # :latest is mutable: always fetch the fresh CI build
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
+      # Schema is applied by the entrypoint (alembic upgrade head) at start.
+      - DB_AUTO_CREATE=false
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing in Dokploy Environment}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-barber}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-barberadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?MINIO_SECRET_KEY missing in Dokploy Environment (8 chars min)}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-barber}
+      # Mandatory: forgeable JWTs otherwise.
+      - TOKEN_SECRET_KEY=${TOKEN_SECRET_KEY:?TOKEN_SECRET_KEY missing in Dokploy Environment}
+      - OPERA_LOG_ENCRYPT_SECRET_KEY=${OPERA_LOG_ENCRYPT_SECRET_KEY:?OPERA_LOG_ENCRYPT_SECRET_KEY missing in Dokploy Environment}
+      - CLIENT_URL=https://${PUBLIC_DOMAIN:?PUBLIC_DOMAIN missing in Dokploy Environment}
+      - CORS_ALLOWED_ORIGINS=["https://${PUBLIC_DOMAIN}"]
+      # Refresh cookie: first-party on the web origin, HTTPS only.
+      - COOKIE_SECURE=true
+      - COOKIE_SAMESITE=lax
+      # WhatsApp OTP login through this project's own GOWA instance.
+      - WHATSAPP_AUTH_ENABLED=${WHATSAPP_AUTH_ENABLED:-true}
+      - BRAND_NAME=${BRAND_NAME:-Barber}
+      - GOWA_URL=${GOWA_URL:-http://barber-gowa:3000}
+      - GOWA_BASIC_USER=${GOWA_BASIC_USER:-admin}
+      - GOWA_BASIC_PASS=${GOWA_BASIC_PASS:?GOWA_BASIC_PASS missing in Dokploy Environment}
+      - PHONE_DEFAULT_COUNTRY_CODE=${PHONE_DEFAULT_COUNTRY_CODE:-}
+      - PHONE_KEEP_LEADING_ZERO=${PHONE_KEEP_LEADING_ZERO:-false}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    # Unique aliases: Dokploy also attaches services to the shared
+    # dokploy-network, where a bare "api" could resolve to ANOTHER project.
+    networks:
+      barber:
+        aliases: [barber-api]
+
+  web:
+    image: ${BARBER_IMAGE:-ghcr.io/owner/barber}-web:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      - API_INTERNAL_URL=http://barber-api:8000
+    expose:
+      - "3000"
+    depends_on:
+      - api
+    networks: [barber]
+
+  gowa:
+    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
+    restart: unless-stopped
+    command: ["rest", "--port=3000", "--basic-auth=${GOWA_BASIC_USER:-admin}:${GOWA_BASIC_PASS:?GOWA_BASIC_PASS missing in Dokploy Environment}"]
+    volumes:
+      - gowadata:/app/storages  # WhatsApp session: keep it, or re-pair
+    expose:
+      - "3000"
+    networks:
+      barber:
+        aliases: [barber-gowa]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing in Dokploy Environment}
+      - POSTGRES_DB=${POSTGRES_DATABASE:-barber}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DATABASE:-barber}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [barber]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [barber]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-barberadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:?MINIO_SECRET_KEY missing in Dokploy Environment (8 chars min)}
+    volumes:
+      - miniodata:/data
+    networks:
+      barber:
+        aliases: [barber-minio]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  gowadata:
+
+networks:
+  barber:

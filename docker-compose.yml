@@ -1,0 +1,121 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: barber:latest
+    container_name: barber_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Point the app at the compose service names (overrides .env localhost)
+      - POSTGRES_HOST=barber_postgres
+      - REDIS_HOST=barber_redis
+      - MINIO_ENDPOINT=barber_minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - barber
+
+  # Next.js frontend (client/). The browser only talks to this origin: it
+  # proxies /admin/api/v1/* to the API over the internal network
+  # (API_INTERNAL_URL, read at runtime), so the refresh cookie stays first-party.
+  web:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    image: barber-web:latest
+    container_name: barber_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - API_INTERNAL_URL=http://barber_api:8000
+    depends_on:
+      - api
+    networks:
+      - barber
+
+  # WhatsApp gateway (GOWA, go-whatsapp-web-multidevice) - opt-in.
+  # Enable it with COMPOSE_PROFILES=whatsapp and GOWA_URL=http://barber_gowa:3000
+  # in .env, then pair the *system* WhatsApp number by scanning the QR code at
+  # http://localhost:3002 (login: GOWA_BASIC_USER / GOWA_BASIC_PASS).
+  # Without it (dev), the OTP code is printed in the api logs.
+  gowa:
+    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
+    container_name: barber_gowa
+    profiles: ["whatsapp"]
+    restart: unless-stopped
+    command: ["rest", "--port=3000", "--basic-auth=${GOWA_BASIC_USER:-admin}:${GOWA_BASIC_PASS:-change-me}"]
+    volumes:
+      - barber_gowa:/app/storages
+    networks:
+      - barber
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: barber_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DATABASE:-barber}
+    volumes:
+      - barber_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DATABASE:-barber}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - barber
+
+  redis:
+    image: redis:7-alpine
+    container_name: barber_redis
+    restart: unless-stopped
+    volumes:
+      - barber_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - barber
+
+  minio:
+    image: minio/minio:latest
+    container_name: barber_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - barber_minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - barber
+
+volumes:
+  barber_postgres:
+  barber_redis:
+  barber_minio:
+  barber_gowa:
+
+networks:
+  barber:
+    driver: bridge
