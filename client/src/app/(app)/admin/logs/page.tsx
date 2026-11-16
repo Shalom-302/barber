@@ -1,26 +1,17 @@
 "use client";
 
-import { useCallback } from "react";
-import { DataTable, formatDate, usePaged, type Column } from "@/components/admin/data-table";
-import { PageHeader } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Tabs } from "@/components/ui/tabs";
+import { useCallback, useState } from "react";
+import { DataTable, formatDate, Pill, usePaged, type Column } from "@/components/admin/data-table";
+import { PageHeader, Tabs } from "@/components/kx/ui";
 import { adminApi, type LoginLog, type OperaLog } from "@/lib/api/services";
 
 const loginColumns: Column<LoginLog>[] = [
-    { header: "Identifiant", cell: l => <span className="font-medium text-primary">{l.email}</span> },
-    {
-        header: "Résultat",
-        cell: l => (
-            <Badge size="sm" color={l.status ? "success" : "error"}>
-                {l.status ? "Réussie" : "Échec"}
-            </Badge>
-        ),
-    },
+    { header: "Identifiant", cell: l => <span className="font-medium">{l.email}</span> },
+    { header: "Résultat", cell: l => <Pill tone={l.status ? "ok" : "bad"}>{l.status ? "Réussie" : "Échec"}</Pill> },
     { header: "Message", cell: l => l.msg },
-    { header: "IP", cell: l => l.ip },
+    { header: "IP", cell: l => <span className="font-mono text-xs">{l.ip}</span> },
     { header: "Navigateur", cell: l => [l.browser, l.os].filter(Boolean).join(" · ") || "—" },
-    { header: "Date", cell: l => formatDate(l.login_time) },
+    { header: "Date", cell: l => <span className="whitespace-nowrap text-kx-muted">{formatDate(l.login_time)}</span> },
 ];
 
 const operaColumns: Column<OperaLog>[] = [
@@ -28,22 +19,15 @@ const operaColumns: Column<OperaLog>[] = [
     {
         header: "Requête",
         cell: o => (
-            <span className="font-mono text-xs">
+            <span className="font-mono text-xs whitespace-nowrap">
                 {o.method} {o.path}
             </span>
         ),
     },
-    {
-        header: "Code",
-        cell: o => (
-            <Badge size="sm" color={o.status ? "success" : "error"}>
-                {o.code}
-            </Badge>
-        ),
-    },
+    { header: "Code", cell: o => <Pill tone={o.status ? "ok" : "bad"}>{o.code}</Pill> },
     { header: "Durée", cell: o => `${Math.round(o.cost_time)} ms` },
-    { header: "IP", cell: o => o.ip },
-    { header: "Date", cell: o => formatDate(o.opera_time) },
+    { header: "IP", cell: o => <span className="font-mono text-xs">{o.ip}</span> },
+    { header: "Date", cell: o => <span className="whitespace-nowrap text-kx-muted">{formatDate(o.opera_time)}</span> },
 ];
 
 function LoginLogs() {
@@ -57,18 +41,21 @@ function OperaLogs() {
 }
 
 export default function AdminLogsPage() {
+    const [tab, setTab] = useState<"login" | "opera">("login");
     return (
         <>
-            <PageHeader title="Journaux" description="Connexions et opérations sur l'API." />
-            <Tabs
-                defaultValue="login"
-                type="button-border"
-                items={[
-                    { value: "login", label: "Connexions", content: <LoginLogs /> },
-                    { value: "opera", label: "Opérations", content: <OperaLogs /> },
-                ]}
-                contentClassName="mt-6"
-            />
+            <PageHeader title="Journaux" sub="Connexions et opérations sur l’API." />
+            <div className="mb-5">
+                <Tabs
+                    value={tab}
+                    onChange={setTab}
+                    items={[
+                        { value: "login", label: "Connexions" },
+                        { value: "opera", label: "Opérations" },
+                    ]}
+                />
+            </div>
+            {tab === "login" ? <LoginLogs /> : <OperaLogs />}
         </>
     );
 }

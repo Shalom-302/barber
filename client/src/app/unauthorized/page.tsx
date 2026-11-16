@@ -1,17 +1,24 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { IconShield, Logo } from "@/components/kx/icons";
 
 export default function UnauthorizedPage() {
     return (
-        <div className="flex min-h-screen items-center justify-center bg-secondary px-4">
-            <div className="w-full max-w-md rounded-xl border border-secondary bg-primary p-8 text-center shadow-sm">
-                <h1 className="text-display-xs font-semibold text-primary">Accès refusé</h1>
-                <p className="mt-2 text-md text-tertiary">
-                    Cette page est réservée au barbier.
-                </p>
-                <Button asChild size="md" className="mt-6">
-                    <Link href="/mes-rendez-vous">Mes rendez-vous</Link>
-                </Button>
+        <div className="grid min-h-screen place-items-center bg-kx-bg px-4">
+            <div className="w-full max-w-md text-center">
+                <div className="mb-8 flex justify-center">
+                    <Logo />
+                </div>
+                <div className="card sm:p-10">
+                    <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-kx-panel2">
+                        <IconShield className="h-6 w-6" />
+                    </span>
+                    <h1 className="mt-5 font-display text-2xl font-semibold">Accès réservé au barbier</h1>
+                    <p className="mt-2 text-kx-muted">Cette page fait partie du tableau de bord du barbier.</p>
+                    <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                        <Link href="/mes-rendez-vous" className="btn">Mes rendez-vous</Link>
+                        <Link href="/" className="btn-ghost">Accueil</Link>
+                    </div>
+                </div>
             </div>
         </div>
     );

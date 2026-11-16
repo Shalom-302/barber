@@ -1,30 +1,19 @@
 "use client";
 
-// Booking flow: prestation -> date -> créneau -> adresse -> récapitulatif.
-// Public until the final step: login (WhatsApp) is asked at submit time and the
+// Booking flow: prestation -> date & heure -> adresse -> récapitulatif -> envoyé.
+// Public until submit: login (WhatsApp) is asked at that moment and the
 // in-progress draft survives the round trip in sessionStorage.
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
 import Link from "next/link";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check } from "@untitled-ui/icons-react";
 import { toast } from "sonner";
-import { FieldLabel, FormError } from "@/components/auth/auth-card";
-import { Card, NativeInput, SelectField, Spinner, TextareaField } from "@/components/barber/ui";
-import { PublicShell } from "@/components/barber/public-shell";
-import { Button } from "@/components/ui/button";
-import { barberApi, type PublicProfile, type Service, type Slot } from "@/lib/api/barber";
+import { ClientShell } from "@/components/kx/client-shell";
+import { IconArrow, IconArrowLeft, IconCheck, IconClock, IconPin, IconScissors, IconWhatsapp } from "@/components/kx/icons";
+import { ErrorBox, Loading, Spinner, StatusBadge } from "@/components/kx/ui";
+import { barberApi, type Booking, type PublicProfile, type Service, type Slot } from "@/lib/api/barber";
 import { ApiError, errorMessage } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
-import {
-    addDaysISO,
-    formatDateTime,
-    formatDayShort,
-    formatDuration,
-    formatPrice,
-    formatTime,
-    todayISO,
-} from "@/lib/barber/format";
+import { addDaysISO, formatDateTime, formatDuration, formatPrice, formatTime, TIMEZONE, todayISO } from "@/lib/barber/format";
 import { cn } from "@/lib/utils/cn";
 
 type Draft = {
@@ -38,18 +27,10 @@ type Draft = {
     note: string;
 };
 
-const EMPTY: Draft = {
-    serviceId: null,
-    day: null,
-    startAt: null,
-    commune: "",
-    quartier: "",
-    address: "",
-    landmark: "",
-    note: "",
-};
+const EMPTY: Draft = { serviceId: null, day: null, startAt: null, commune: "", quartier: "", address: "", landmark: "", note: "" };
 const DRAFT_KEY = "barber:booking-draft";
-const STEPS = ["Prestation", "Date", "Créneau", "Adresse", "Récapitulatif"];
+const STEPS = ["Prestation", "Date & heure", "Adresse", "Récapitulatif"];
+const PREFETCH_DAYS = 14;
 
 function loadDraft(): Draft | null {
     try {
@@ -59,7 +40,6 @@ function loadDraft(): Draft | null {
         return null;
     }
 }
-
 function saveDraft(d: Draft) {
     try {
         sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d));
@@ -67,7 +47,6 @@ function saveDraft(d: Draft) {
         /* private mode: the draft is simply not kept */
     }
 }
-
 function clearDraft() {
     try {
         sessionStorage.removeItem(DRAFT_KEY);
@@ -76,30 +55,62 @@ function clearDraft() {
     }
 }
 
-function Stepper({ step, onGo }: { step: number; onGo: (i: number) => void }) {
+const wdFmt = new Intl.DateTimeFormat("fr-FR", { timeZone: TIMEZONE, weekday: "short" });
+const dFmt = new Intl.DateTimeFormat("fr-FR", { timeZone: TIMEZONE, day: "numeric" });
+const mFmt = new Intl.DateTimeFormat("fr-FR", { timeZone: TIMEZONE, month: "short" });
+const longDay = new Intl.DateTimeFormat("fr-FR", { timeZone: TIMEZONE, weekday: "long", day: "numeric", month: "long" });
+const hourFmt = new Intl.DateTimeFormat("fr-FR", { timeZone: TIMEZONE, hour: "2-digit", hourCycle: "h23" });
+
+function dayParts(iso: string) {
+    const d = new Date(`${iso}T12:00:00Z`);
+    return { wd: wdFmt.format(d).replace(".", ""), day: dFmt.format(d), month: mFmt.format(d).replace(".", "") };
+}
+
+function groupSlots(slots: Slot[]) {
+    const groups: { label: string; items: Slot[] }[] = [
+        { label: "Matin", items: [] },
+        { label: "Après-midi", items: [] },
+        { label: "Soir", items: [] },
+    ];
+    for (const s of slots) {
+        const h = Number(hourFmt.format(new Date(s.start_at)));
+        groups[h < 12 ? 0 : h < 17 ? 1 : 2].items.push(s);
+    }
+    return groups.filter(g => g.items.length);
+}
+
+function Progress({ step, onGo }: { step: number; onGo: (i: number) => void }) {
     return (
-        <ol className="mb-6 flex gap-1.5 overflow-x-auto pb-1">
-            {STEPS.map((label, i) => (
-                <li key={label} className="shrink-0">
-                    <button
-                        type="button"
-                        disabled={i > step}
-                        onClick={() => onGo(i)}
-                        className={cn(
-                            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
-                            i === step
-                                ? "bg-brand-solid text-white"
-                                : i < step
-                                  ? "bg-brand-primary text-brand-secondary"
-                                  : "bg-primary text-quaternary ring-1 ring-secondary ring-inset"
-                        )}
-                    >
-                        {i < step ? <Check className="size-3.5" /> : <span>{i + 1}</span>}
-                        {label}
-                    </button>
-                </li>
-            ))}
-        </ol>
+        <div className="mb-6 sm:mb-8">
+            <div className="h-1.5 overflow-hidden rounded-full bg-kx-panel2">
+                <div className="h-full rounded-full bg-black transition-all duration-500" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+            </div>
+            <ol className="mt-3 grid grid-cols-4 gap-1 text-[11px] sm:text-xs">
+                {STEPS.map((label, i) => (
+                    <li key={label}>
+                        <button
+                            type="button"
+                            disabled={i > step}
+                            onClick={() => onGo(i)}
+                            className={cn(
+                                "flex w-full items-center gap-1.5 font-medium",
+                                i === step ? "text-black" : i < step ? "text-kx-muted hover:text-black" : "text-zinc-300"
+                            )}
+                        >
+                            <span
+                                className={cn(
+                                    "grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold",
+                                    i < step ? "bg-black text-white" : i === step ? "border-2 border-black" : "border border-zinc-300"
+                                )}
+                            >
+                                {i < step ? <IconCheck className="h-3 w-3" /> : i + 1}
+                            </span>
+                            <span className="truncate">{label}</span>
+                        </button>
+                    </li>
+                ))}
+            </ol>
+        </div>
     );
 }
 
@@ -112,13 +123,13 @@ function BookingFlow() {
     const [profile, setProfile] = useState<PublicProfile | null>(null);
     const [draft, setDraft] = useState<Draft>(EMPTY);
     const [step, setStep] = useState(0);
-    const [slots, setSlots] = useState<Slot[] | null>(null);
-    const [slotsLoading, setSlotsLoading] = useState(false);
+    const [availability, setAvailability] = useState<Record<string, Slot[] | "loading">>({});
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [ready, setReady] = useState(false);
+    const [done, setDone] = useState<Booking | null>(null);
+    const daysRef = useRef<HTMLDivElement>(null);
 
-    // Load catalogue + profile, restore a draft (or ?service=).
     useEffect(() => {
         Promise.all([barberApi.services(), barberApi.profile()])
             .then(([s, p]) => {
@@ -128,7 +139,7 @@ function BookingFlow() {
                 const fromQuery = Number(params.get("service"));
                 if (saved && saved.serviceId && s.some(x => x.id === saved.serviceId)) {
                     setDraft(saved);
-                    setStep(saved.startAt ? (saved.address ? 4 : 3) : saved.day ? 2 : 1);
+                    setStep(saved.startAt ? (saved.address && saved.commune ? 3 : 2) : 1);
                 } else if (fromQuery && s.some(x => x.id === fromQuery)) {
                     setDraft({ ...EMPTY, serviceId: fromQuery });
                     setStep(1);
@@ -139,65 +150,83 @@ function BookingFlow() {
     }, [params]);
 
     useEffect(() => {
-        if (ready) saveDraft(draft);
-    }, [draft, ready]);
+        if (ready && !done) saveDraft(draft);
+    }, [draft, ready, done]);
 
-    const service = useMemo(
-        () => services?.find(s => s.id === draft.serviceId) ?? null,
-        [services, draft.serviceId]
-    );
-
+    const service = useMemo(() => services?.find(s => s.id === draft.serviceId) ?? null, [services, draft.serviceId]);
     const days = useMemo(() => {
         const today = todayISO();
         const n = profile?.horizon_days ?? 30;
         return Array.from({ length: n + 1 }, (_, i) => addDaysISO(today, i));
     }, [profile]);
 
-    const loadSlots = useCallback(async () => {
-        if (!draft.serviceId || !draft.day) return;
-        setSlotsLoading(true);
-        setSlots(null);
-        try {
-            const res = await barberApi.availability(draft.serviceId, draft.day);
-            setSlots(res.slots);
-        } catch (e) {
-            setError(errorMessage(e));
-            setSlots([]);
-        } finally {
-            setSlotsLoading(false);
-        }
-    }, [draft.serviceId, draft.day]);
+    const fetchDay = useCallback(
+        async (serviceId: number, day: string, force = false) => {
+            setAvailability(a => (a[day] && a[day] !== "loading" && !force ? a : { ...a, [day]: "loading" }));
+            try {
+                const res = await barberApi.availability(serviceId, day);
+                setAvailability(a => ({ ...a, [day]: res.slots }));
+            } catch {
+                setAvailability(a => ({ ...a, [day]: [] }));
+            }
+        },
+        []
+    );
+
+    // New service: reset availability and prefetch the next two weeks (4 at a time).
+    useEffect(() => {
+        if (!draft.serviceId || !profile) return;
+        setAvailability({});
+        let cancelled = false;
+        const serviceId = draft.serviceId;
+        const queue = days.slice(0, PREFETCH_DAYS);
+        const worker = async () => {
+            while (queue.length && !cancelled) {
+                const d = queue.shift()!;
+                await fetchDay(serviceId, d, true);
+            }
+        };
+        void Promise.all([worker(), worker(), worker(), worker()]);
+        return () => {
+            cancelled = true;
+        };
+    }, [draft.serviceId, profile, days, fetchDay]);
+
+    // Pick a default day: the saved one, else the first day with slots.
+    useEffect(() => {
+        if (step !== 1 || draft.day) return;
+        const first = days.find(d => Array.isArray(availability[d]) && (availability[d] as Slot[]).length);
+        if (first) setDraft(d => ({ ...d, day: first }));
+    }, [step, draft.day, days, availability]);
 
     useEffect(() => {
-        if (step === 2) void loadSlots();
-    }, [step, loadSlots]);
+        if (draft.serviceId && draft.day && availability[draft.day] === undefined) void fetchDay(draft.serviceId, draft.day);
+    }, [draft.serviceId, draft.day, availability, fetchDay]);
 
     function update(patch: Partial<Draft>) {
         setDraft(d => ({ ...d, ...patch }));
     }
-
     function go(i: number) {
         setError(null);
         setStep(i);
         window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
-    function submitAddress(e: FormEvent) {
-        e.preventDefault();
-        if (!draft.commune) {
+    const canContinue =
+        step === 0 ? !!draft.serviceId : step === 1 ? !!draft.startAt : step === 2 ? !!(draft.commune && draft.quartier.trim().length >= 2 && draft.address.trim().length >= 3) : true;
+
+    function next() {
+        if (step === 2 && !draft.commune) {
             setError("Choisissez votre commune.");
             return;
         }
-        go(4);
+        if (step < 3) go(step + 1);
+        else void submit();
     }
 
     async function submit() {
         if (!service || !draft.startAt) return;
-        if (!isAuthenticated) {
-            router.push(`/auth/login?next=${encodeURIComponent("/reserver")}`);
-            return;
-        }
-        if (!user?.pseudo) {
+        if (!isAuthenticated || !user?.pseudo) {
             router.push(`/auth/login?next=${encodeURIComponent("/reserver")}`);
             return;
         }
@@ -214,13 +243,14 @@ function BookingFlow() {
                 note: draft.note.trim() || null,
             });
             clearDraft();
-            toast.success("Demande envoyée ! Le barbier va la confirmer.");
-            router.push(`/mes-rendez-vous/${booking.reference}`);
+            setDone(booking);
+            window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (e) {
             if (e instanceof ApiError && e.status === 409) {
                 toast.error(e.message);
                 update({ startAt: null });
-                go(2);
+                if (draft.day) void fetchDay(service.id, draft.day, true);
+                go(1);
             } else {
                 setError(errorMessage(e));
             }
@@ -230,252 +260,314 @@ function BookingFlow() {
     }
 
     if (!services) {
-        return error ? <FormError message={error} /> : <Spinner />;
+        return <div className="mx-auto max-w-2xl px-4 py-10 sm:px-8">{error ? <ErrorBox message={error} /> : <Loading />}</div>;
     }
 
     const expiryHours = profile ? Math.max(1, Math.round(profile.pending_expiry_minutes / 60)) : 2;
 
+    // ---- Success -----------------------------------------------------------
+    if (done) {
+        return (
+            <div className="mx-auto max-w-xl px-4 py-10 sm:px-8 sm:py-16">
+                <div className="card text-center sm:p-10">
+                    <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-black text-white">
+                        <IconCheck className="h-8 w-8" />
+                    </span>
+                    <h1 className="mt-6 font-display text-3xl font-semibold">Demande envoyée !</h1>
+                    <p className="mt-2 text-kx-muted">Le barbier va confirmer votre rendez-vous. Vous serez prévenu sur WhatsApp.</p>
+                    <div className="mt-6 flex justify-center">
+                        <StatusBadge status={done.status} />
+                    </div>
+                    <dl className="mt-6 divide-y divide-kx-border rounded-2xl border border-kx-border text-left text-sm">
+                        <div className="flex justify-between gap-4 px-4 py-3">
+                            <dt className="text-kx-muted">Référence</dt>
+                            <dd className="font-mono font-semibold">{done.reference}</dd>
+                        </div>
+                        <div className="flex justify-between gap-4 px-4 py-3">
+                            <dt className="text-kx-muted">Rendez-vous</dt>
+                            <dd className="text-right font-medium">{formatDateTime(done.start_at)}</dd>
+                        </div>
+                        <div className="flex justify-between gap-4 px-4 py-3">
+                            <dt className="text-kx-muted">Prix</dt>
+                            <dd className="font-semibold">{formatPrice(done.price)}</dd>
+                        </div>
+                    </dl>
+                    <p className="alert-warn mt-5 text-left">
+                        Sans réponse du barbier, la demande expire {done.expires_at ? formatDateTime(done.expires_at).toLowerCase() : `après ${expiryHours} h`}.
+                    </p>
+                    <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                        <Link href={`/mes-rendez-vous/${done.reference}`} className="btn btn-lg">
+                            Suivre ma demande <IconArrow className="h-4 w-4" />
+                        </Link>
+                        <Link href="/" className="btn-ghost btn-lg">
+                            Accueil
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const daySlots = draft.day ? availability[draft.day] : undefined;
+
     return (
-        <div className="mx-auto max-w-2xl">
-            <h1 className="text-display-xs font-semibold text-primary">Réserver</h1>
-            <p className="mb-6 mt-1 text-md text-tertiary">Le barbier se déplace à votre adresse.</p>
-            <Stepper step={step} onGo={go} />
+        <div className="mx-auto max-w-2xl px-4 pt-6 pb-40 sm:px-8 sm:pt-10 sm:pb-16">
+            <div className="mb-6 flex items-center gap-3">
+                {step > 0 && (
+                    <button type="button" onClick={() => go(step - 1)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-kx-border bg-white hover:border-black/30" aria-label="Étape précédente">
+                        <IconArrowLeft className="h-5 w-5" />
+                    </button>
+                )}
+                <div className="min-w-0">
+                    <p className="eyebrow">Réservation · étape {step + 1} / {STEPS.length}</p>
+                    <h1 className="font-display text-2xl font-semibold sm:text-3xl">
+                        {["Quelle prestation ?", "Quand ?", "Où ?", "On récapitule"][step]}
+                    </h1>
+                </div>
+            </div>
+            <Progress step={step} onGo={go} />
 
-            {step > 0 && (
-                <button
-                    type="button"
-                    onClick={() => go(step - 1)}
-                    className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-tertiary hover:text-secondary"
-                >
-                    <ArrowLeft className="size-4" /> Retour
-                </button>
-            )}
-
+            {/* STEP 0: service */}
             {step === 0 && (
                 <div className="grid gap-3">
-                    {services.map(s => (
-                        <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => {
-                                update({ serviceId: s.id, startAt: null });
-                                go(1);
-                            }}
-                            className={cn(
-                                "rounded-xl border bg-primary p-4 text-left shadow-xs transition-colors hover:border-brand",
-                                draft.serviceId === s.id ? "border-brand ring-2 ring-brand" : "border-secondary"
-                            )}
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <span className="font-semibold text-primary">{s.name}</span>
-                                <span className="shrink-0 font-bold text-brand-secondary">{formatPrice(s.price)}</span>
-                            </div>
-                            {s.description && <p className="mt-1 text-sm text-tertiary">{s.description}</p>}
-                            <p className="mt-1 text-sm text-quaternary">{formatDuration(s.duration_minutes)}</p>
-                        </button>
-                    ))}
-                    {services.length === 0 && <p className="text-tertiary">Aucune prestation disponible.</p>}
-                </div>
-            )}
-
-            {step === 1 && (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    {days.map(d => (
-                        <button
-                            key={d}
-                            type="button"
-                            onClick={() => {
-                                update({ day: d, startAt: null });
-                                go(2);
-                            }}
-                            className={cn(
-                                "rounded-lg border bg-primary px-2 py-3 text-center text-sm font-semibold capitalize shadow-xs hover:border-brand",
-                                draft.day === d ? "border-brand text-brand-secondary ring-2 ring-brand" : "border-secondary text-secondary"
-                            )}
-                        >
-                            {d === days[0] ? "Aujourd'hui" : formatDayShort(d)}
-                        </button>
-                    ))}
-                </div>
-            )}
-
-            {step === 2 && (
-                <div>
-                    <p className="mb-3 text-sm font-medium capitalize text-secondary">
-                        {draft.day && formatDayShort(draft.day)} · {service?.name}
-                    </p>
-                    {slotsLoading && <Spinner />}
-                    {slots && slots.length === 0 && (
-                        <Card>
-                            <p className="text-sm text-tertiary">
-                                Aucun créneau libre ce jour-là. Choisissez une autre date.
-                            </p>
-                            <Button className="mt-4" variant="secondary" size="md" onClick={() => go(1)}>
-                                Changer de date
-                            </Button>
-                        </Card>
-                    )}
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                        {slots?.map(s => (
+                    {services.map(s => {
+                        const on = draft.serviceId === s.id;
+                        return (
                             <button
-                                key={s.start_at}
+                                key={s.id}
                                 type="button"
-                                onClick={() => {
-                                    update({ startAt: s.start_at });
-                                    go(3);
-                                }}
+                                onClick={() => update({ serviceId: s.id, startAt: null, day: null })}
                                 className={cn(
-                                    "rounded-lg border bg-primary px-2 py-3 text-center text-md font-semibold shadow-xs hover:border-brand",
-                                    draft.startAt === s.start_at
-                                        ? "border-brand text-brand-secondary ring-2 ring-brand"
-                                        : "border-secondary text-secondary"
+                                    "flex items-start gap-4 rounded-2xl border bg-white p-4 text-left transition sm:p-5",
+                                    on ? "border-black shadow-card ring-4 ring-black/5" : "border-kx-border hover:border-black/30"
                                 )}
                             >
-                                {formatTime(s.start_at)}
+                                <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full", on ? "bg-black text-white" : "bg-kx-panel2")}>
+                                    <IconScissors className="h-5 w-5" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block font-display text-lg font-semibold">{s.name}</span>
+                                    {s.description && <span className="mt-0.5 block text-sm text-kx-muted">{s.description}</span>}
+                                    <span className="mt-2 inline-flex items-center gap-1.5 text-sm text-kx-muted">
+                                        <IconClock className="h-4 w-4" /> {formatDuration(s.duration_minutes)}
+                                    </span>
+                                </span>
+                                <span className="shrink-0 text-right">
+                                    <span className="block font-display text-xl font-semibold whitespace-nowrap">{formatPrice(s.price)}</span>
+                                    <span className={cn("mt-2 ml-auto grid h-6 w-6 place-items-center rounded-full border-2", on ? "border-black bg-black text-white" : "border-kx-border")}>
+                                        {on && <IconCheck className="h-3.5 w-3.5" />}
+                                    </span>
+                                </span>
                             </button>
-                        ))}
+                        );
+                    })}
+                    {services.length === 0 && <p className="text-kx-muted">Aucune prestation disponible pour le moment.</p>}
+                </div>
+            )}
+
+            {/* STEP 1: day + slot */}
+            {step === 1 && (
+                <div>
+                    <div ref={daysRef} className="-mx-4 overflow-x-auto px-4 pb-2 sm:-mx-8 sm:px-8">
+                        <div className="flex w-max gap-2">
+                            {days.map(d => {
+                                const p = dayParts(d);
+                                const a = availability[d];
+                                const empty = Array.isArray(a) && a.length === 0;
+                                const on = draft.day === d;
+                                return (
+                                    <button
+                                        key={d}
+                                        type="button"
+                                        onClick={() => update({ day: d, startAt: null })}
+                                        className={cn(
+                                            "flex w-16 shrink-0 flex-col items-center rounded-2xl border py-3 transition",
+                                            on ? "border-black bg-black text-white" : empty ? "border-dashed border-kx-border bg-transparent text-zinc-400" : "border-kx-border bg-white hover:border-black/30"
+                                        )}
+                                    >
+                                        <span className={cn("text-[11px] font-medium capitalize", on ? "text-white/70" : "")}>{d === days[0] ? "Auj." : p.wd}</span>
+                                        <span className="font-display text-xl font-semibold">{p.day}</span>
+                                        <span className={cn("text-[11px] capitalize", on ? "text-white/70" : "text-kx-muted")}>{p.month}</span>
+                                        <span className={cn("mt-1 h-1.5 w-1.5 rounded-full", a === "loading" || a === undefined ? "bg-zinc-200" : empty ? "bg-transparent" : on ? "bg-white" : "bg-kx-teal")} />
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="mt-6">
+                        {draft.day && (
+                            <p className="mb-4 font-medium capitalize">
+                                {longDay.format(new Date(`${draft.day}T12:00:00Z`))} · <span className="text-kx-muted normal-case">{service?.name}</span>
+                            </p>
+                        )}
+                        {(daySlots === "loading" || (draft.day && daySlots === undefined)) && <Loading label="Recherche des créneaux…" />}
+                        {!draft.day && <Loading label="Recherche du prochain jour disponible…" />}
+                        {Array.isArray(daySlots) && daySlots.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-kx-border bg-white px-6 py-10 text-center">
+                                <p className="font-display text-lg font-semibold">Complet ou fermé ce jour-là</p>
+                                <p className="mt-1 text-sm text-kx-muted">Choisissez un autre jour ci-dessus.</p>
+                            </div>
+                        )}
+                        {Array.isArray(daySlots) &&
+                            groupSlots(daySlots).map(g => (
+                                <div key={g.label} className="mb-5">
+                                    <p className="mb-2 text-xs font-semibold tracking-wide text-kx-muted uppercase">{g.label}</p>
+                                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                                        {g.items.map(s => {
+                                            const on = draft.startAt === s.start_at;
+                                            return (
+                                                <button
+                                                    key={s.start_at}
+                                                    type="button"
+                                                    onClick={() => update({ startAt: s.start_at })}
+                                                    className={cn(
+                                                        "rounded-xl border py-3 text-center font-display text-base font-semibold transition",
+                                                        on ? "border-black bg-black text-white" : "border-kx-border bg-white hover:border-black/40"
+                                                    )}
+                                                >
+                                                    {formatTime(s.start_at)}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
                     </div>
                 </div>
             )}
 
-            {step === 3 && (
-                <form onSubmit={submitAddress} className="space-y-4">
-                    <Card className="space-y-4">
+            {/* STEP 2: address */}
+            {step === 2 && (
+                <form
+                    onSubmit={e => {
+                        e.preventDefault();
+                        next();
+                    }}
+                    className="card space-y-5"
+                    id="address-form"
+                >
+                    <div>
+                        <p className="label">Commune</p>
+                        <div className="flex flex-wrap gap-2">
+                            {profile?.communes.map(c => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => update({ commune: c })}
+                                    className={cn(
+                                        "rounded-full border px-3.5 py-2 text-sm font-medium transition",
+                                        draft.commune === c ? "border-black bg-black text-white" : "border-kx-border bg-white hover:border-black/30"
+                                    )}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="grid gap-5 sm:grid-cols-2">
                         <div>
-                            <FieldLabel htmlFor="commune">Commune</FieldLabel>
-                            <SelectField
-                                id="commune"
-                                value={draft.commune}
-                                onChange={e => update({ commune: e.target.value })}
-                                required
-                            >
-                                <option value="">Choisir…</option>
-                                {profile?.communes.map(c => (
-                                    <option key={c} value={c}>
-                                        {c}
-                                    </option>
-                                ))}
-                            </SelectField>
+                            <label className="label" htmlFor="quartier">Quartier</label>
+                            <input id="quartier" className="input" value={draft.quartier} onChange={e => update({ quartier: e.target.value })} placeholder="Ex. Angré 8e tranche" minLength={2} maxLength={80} required />
                         </div>
                         <div>
-                            <FieldLabel htmlFor="quartier">Quartier</FieldLabel>
-                            <NativeInput
-                                id="quartier"
-                                value={draft.quartier}
-                                onChange={e => update({ quartier: e.target.value })}
-                                placeholder="Ex. Angré 8e tranche"
-                                minLength={2}
-                                maxLength={80}
-                                required
-                            />
+                            <label className="label" htmlFor="address">Adresse</label>
+                            <input id="address" className="input" value={draft.address} onChange={e => update({ address: e.target.value })} placeholder="Rue, immeuble, villa…" minLength={3} maxLength={300} required />
                         </div>
-                        <div>
-                            <FieldLabel htmlFor="address">Adresse</FieldLabel>
-                            <NativeInput
-                                id="address"
-                                value={draft.address}
-                                onChange={e => update({ address: e.target.value })}
-                                placeholder="Rue, immeuble, villa…"
-                                minLength={3}
-                                maxLength={300}
-                                required
-                            />
-                        </div>
-                        <div>
-                            <FieldLabel htmlFor="landmark">Point de repère (facultatif)</FieldLabel>
-                            <NativeInput
-                                id="landmark"
-                                value={draft.landmark}
-                                onChange={e => update({ landmark: e.target.value })}
-                                placeholder="Ex. derrière la pharmacie"
-                                maxLength={300}
-                            />
-                        </div>
-                        <div>
-                            <FieldLabel htmlFor="note">Note pour le barbier (facultatif)</FieldLabel>
-                            <TextareaField
-                                id="note"
-                                value={draft.note}
-                                onChange={e => update({ note: e.target.value })}
-                                maxLength={500}
-                            />
-                        </div>
-                    </Card>
-                    <FormError message={error} />
-                    <Button type="submit" size="lg" className="w-full">
-                        Voir le récapitulatif
-                    </Button>
+                    </div>
+                    <div>
+                        <label className="label" htmlFor="landmark">Point de repère <span className="font-normal text-kx-muted">(facultatif)</span></label>
+                        <input id="landmark" className="input" value={draft.landmark} onChange={e => update({ landmark: e.target.value })} placeholder="Ex. derrière la pharmacie" maxLength={300} />
+                    </div>
+                    <div>
+                        <label className="label" htmlFor="note">Note pour le barbier <span className="font-normal text-kx-muted">(facultatif)</span></label>
+                        <textarea id="note" className="input min-h-24 resize-y" value={draft.note} onChange={e => update({ note: e.target.value })} maxLength={500} placeholder="Ex. 2e étage, sonnez deux fois" />
+                    </div>
+                    <button type="submit" className="hidden" />
                 </form>
             )}
 
-            {step === 4 && service && draft.startAt && (
+            {/* STEP 3: summary */}
+            {step === 3 && service && draft.startAt && (
                 <div className="space-y-4">
-                    <Card>
-                        <dl className="divide-y divide-secondary">
-                            <div className="flex justify-between gap-4 py-2">
-                                <dt className="text-tertiary">Prestation</dt>
-                                <dd className="text-right font-medium text-primary">{service.name}</dd>
+                    <div className="card p-0 sm:p-0">
+                        <div className="flex items-center justify-between gap-4 border-b border-kx-border p-5 sm:p-6">
+                            <div className="min-w-0">
+                                <p className="font-display text-lg font-semibold">{service.name}</p>
+                                <p className="text-sm text-kx-muted">{formatDuration(service.duration_minutes)}</p>
                             </div>
-                            <div className="flex justify-between gap-4 py-2">
-                                <dt className="text-tertiary">Prix</dt>
-                                <dd className="font-bold text-primary">{formatPrice(service.price)}</dd>
+                            <p className="font-display text-2xl font-semibold whitespace-nowrap">{formatPrice(service.price)}</p>
+                        </div>
+                        <div className="grid gap-4 p-5 text-sm sm:grid-cols-2 sm:p-6">
+                            <div className="flex gap-3">
+                                <IconClock className="mt-0.5 h-5 w-5 shrink-0 text-kx-muted" />
+                                <div>
+                                    <p className="text-kx-muted">Rendez-vous</p>
+                                    <p className="font-medium">{formatDateTime(draft.startAt)}</p>
+                                </div>
                             </div>
-                            <div className="flex justify-between gap-4 py-2">
-                                <dt className="text-tertiary">Date</dt>
-                                <dd className="text-right font-medium text-primary">{formatDateTime(draft.startAt)}</dd>
+                            <div className="flex gap-3">
+                                <IconPin className="mt-0.5 h-5 w-5 shrink-0 text-kx-muted" />
+                                <div className="min-w-0">
+                                    <p className="text-kx-muted">Adresse</p>
+                                    <p className="font-medium break-words">
+                                        {draft.commune}, {draft.quartier}
+                                        <br />
+                                        {draft.address}
+                                    </p>
+                                    {draft.landmark && <p className="text-kx-muted">Repère : {draft.landmark}</p>}
+                                </div>
                             </div>
-                            <div className="flex justify-between gap-4 py-2">
-                                <dt className="text-tertiary">Durée</dt>
-                                <dd className="font-medium text-primary">{formatDuration(service.duration_minutes)}</dd>
-                            </div>
-                            <div className="flex justify-between gap-4 py-2">
-                                <dt className="text-tertiary">Adresse</dt>
-                                <dd className="text-right font-medium text-primary">
-                                    {draft.commune}, {draft.quartier}
-                                    <br />
-                                    {draft.address}
-                                    {draft.landmark && (
-                                        <>
-                                            <br />
-                                            <span className="text-tertiary">Repère : {draft.landmark}</span>
-                                        </>
-                                    )}
-                                </dd>
-                            </div>
-                        </dl>
-                    </Card>
-                    <p className="rounded-lg bg-warning-primary px-3 py-2 text-sm text-warning-primary">
-                        Votre demande sera confirmée par le barbier ; elle expire après {expiryHours} h sans
-                        réponse. Vous serez prévenu sur WhatsApp.
+                        </div>
+                        <button type="button" onClick={() => go(1)} className="w-full border-t border-kx-border py-3 text-sm font-medium text-kx-muted hover:text-black">
+                            Modifier
+                        </button>
+                    </div>
+                    <p className="alert-warn">
+                        Le barbier confirme votre demande ; sans réponse, elle expire après {expiryHours} h. Vous êtes prévenu sur WhatsApp. Paiement sur place.
                     </p>
                     {!isAuthenticated && (
-                        <p className="text-sm text-tertiary">
-                            Vous allez vous connecter avec votre numéro WhatsApp : votre réservation est gardée.
+                        <p className="alert-info flex items-start gap-2">
+                            <IconWhatsapp className="mt-0.5 h-4 w-4 shrink-0" /> Vous allez vous connecter avec votre numéro WhatsApp : votre réservation est gardée.
                         </p>
                     )}
-                    <FormError message={error} />
-                    <Button size="xl" className="w-full" isLoading={submitting} onClick={submit}>
-                        {isAuthenticated ? "Envoyer ma demande" : "Se connecter et envoyer"}
-                    </Button>
-                    <p className="text-center text-sm text-tertiary">
-                        <Link href="/mes-rendez-vous" className="font-semibold text-brand-secondary">
-                            Voir mes rendez-vous
-                        </Link>
-                    </p>
                 </div>
             )}
 
-            {step < 3 && <FormError message={error} />}
+            <div className="mt-5">
+                <ErrorBox message={error} />
+            </div>
+
+            {/* Sticky action bar */}
+            <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-30 border-t border-kx-border bg-white/95 backdrop-blur sm:static sm:mt-8 sm:border-0 sm:bg-transparent sm:backdrop-blur-none">
+                <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 py-3 sm:px-0 sm:py-0">
+                    <div className="min-w-0 flex-1">
+                        {service ? (
+                            <>
+                                <p className="truncate text-xs text-kx-muted">{draft.startAt ? `${service.name} · ${formatTime(draft.startAt)}` : service.name}</p>
+                                <p className="font-display text-lg font-semibold">{formatPrice(service.price)}</p>
+                            </>
+                        ) : (
+                            <p className="text-sm text-kx-muted">Choisissez une prestation</p>
+                        )}
+                    </div>
+                    <button type="button" onClick={next} disabled={!canContinue || submitting} className="btn btn-lg shrink-0">
+                        {submitting ? <Spinner /> : null}
+                        {step < 3 ? "Continuer" : isAuthenticated ? "Envoyer ma demande" : "Se connecter et envoyer"}
+                        {!submitting && <IconArrow className="h-4 w-4" />}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
 
 export default function ReserverPage() {
     return (
-        <PublicShell>
-            <Suspense fallback={<Spinner />}>
+        <ClientShell bare>
+            <Suspense fallback={<Loading />}>
                 <BookingFlow />
             </Suspense>
-        </PublicShell>
+        </ClientShell>
     );
 }

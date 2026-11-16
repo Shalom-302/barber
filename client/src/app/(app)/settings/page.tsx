@@ -1,13 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { PageHeader } from "@/components/layout/app-shell";
-import AppearanceSettings from "@/components/settings/appearance-settings";
-
+// Light theme only (Kortex design): the former appearance page now lives in the profile.
 export default function SettingsPage() {
-    return (
-        <>
-            <PageHeader title="Paramètres" description="Apparence de l'application." />
-            <AppearanceSettings />
-        </>
-    );
+    redirect("/profile");
 }

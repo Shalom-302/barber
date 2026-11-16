@@ -2,41 +2,40 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Plus, Trash01 } from "@untitled-ui/icons-react";
 import { toast } from "sonner";
-import { FieldLabel, FormError } from "@/components/auth/auth-card";
-import { Card, Empty, NativeInput, SectionTitle, Spinner } from "@/components/barber/ui";
-import { PageHeader } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { errorMessage } from "@/lib/api/client";
+import { IconCalendar, IconPlus, IconTrash } from "@/components/kx/icons";
+import { Empty, ErrorBox, Field, Loading, PageHeader, Spinner, Toggle } from "@/components/kx/ui";
 import { barberAdminApi, type Blocked, type BreakPeriod, type Schedule } from "@/lib/api/barber";
-import { WEEKDAYS, formatDateTime } from "@/lib/barber/format";
+import { errorMessage } from "@/lib/api/client";
+import { formatDateTime, WEEKDAYS } from "@/lib/barber/format";
+import { cn } from "@/lib/utils/cn";
 
 const hhmm = (t: string) => t.slice(0, 5);
+const norm = (s: Schedule): Schedule => ({
+    days: s.days.map(d => ({ ...d, start_time: hhmm(d.start_time), end_time: hhmm(d.end_time) })),
+    breaks: s.breaks.map(b => ({ ...b, start_time: hhmm(b.start_time), end_time: hhmm(b.end_time) })),
+});
 
 function ScheduleEditor() {
     const [schedule, setSchedule] = useState<Schedule | null>(null);
     const [saving, setSaving] = useState(false);
+    const [dirty, setDirty] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        barberAdminApi
-            .schedule()
-            .then(s =>
-                setSchedule({
-                    days: s.days.map(d => ({ ...d, start_time: hhmm(d.start_time), end_time: hhmm(d.end_time) })),
-                    breaks: s.breaks.map(b => ({ ...b, start_time: hhmm(b.start_time), end_time: hhmm(b.end_time) })),
-                })
-            )
-            .catch(e => setError(errorMessage(e)));
+        barberAdminApi.schedule().then(s => setSchedule(norm(s))).catch(e => setError(errorMessage(e)));
     }, []);
 
-    if (!schedule) return error ? <FormError message={error} /> : <Spinner />;
+    if (!schedule) return error ? <ErrorBox message={error} /> : <Loading />;
 
+    const edit = (next: Schedule) => {
+        setSchedule(next);
+        setDirty(true);
+    };
     const setDay = (weekday: number, patch: Partial<Schedule["days"][number]>) =>
-        setSchedule({ ...schedule, days: schedule.days.map(d => (d.weekday === weekday ? { ...d, ...patch } : d)) });
+        edit({ ...schedule, days: schedule.days.map(d => (d.weekday === weekday ? { ...d, ...patch } : d)) });
     const setBreak = (index: number, patch: Partial<BreakPeriod>) =>
-        setSchedule({ ...schedule, breaks: schedule.breaks.map((b, i) => (i === index ? { ...b, ...patch } : b)) });
+        edit({ ...schedule, breaks: schedule.breaks.map((b, i) => (i === index ? { ...b, ...patch } : b)) });
 
     async function save() {
         if (!schedule) return;
@@ -45,17 +44,10 @@ function ScheduleEditor() {
         try {
             const res = await barberAdminApi.saveSchedule({
                 days: schedule.days,
-                breaks: schedule.breaks.map(({ weekday, start_time, end_time, label }) => ({
-                    weekday,
-                    start_time,
-                    end_time,
-                    label: label || null,
-                })),
+                breaks: schedule.breaks.map(({ weekday, start_time, end_time, label }) => ({ weekday, start_time, end_time, label: label || null })),
             });
-            setSchedule({
-                days: res.days.map(d => ({ ...d, start_time: hhmm(d.start_time), end_time: hhmm(d.end_time) })),
-                breaks: res.breaks.map(b => ({ ...b, start_time: hhmm(b.start_time), end_time: hhmm(b.end_time) })),
-            });
+            setSchedule(norm(res));
+            setDirty(false);
             toast.success("Horaires enregistrés");
         } catch (e) {
             setError(errorMessage(e));
@@ -65,78 +57,69 @@ function ScheduleEditor() {
     }
 
     return (
-        <Card>
-            <SectionTitle>Horaires de la semaine</SectionTitle>
-            <div className="divide-y divide-secondary">
+        <div className="card">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p className="font-display text-lg font-semibold">Semaine type</p>
+                    <p className="text-sm text-kx-muted">Horaires d’ouverture et pauses de chaque jour.</p>
+                </div>
+                <button type="button" className="btn" disabled={saving || !dirty} onClick={save}>
+                    {saving && <Spinner />} {dirty ? "Enregistrer" : "Enregistré"}
+                </button>
+            </div>
+            <div className="divide-y divide-kx-border">
                 {[...schedule.days]
                     .sort((a, b) => a.weekday - b.weekday)
                     .map(d => {
-                        const breaks = schedule.breaks
-                            .map((b, i) => ({ b, i }))
-                            .filter(x => x.b.weekday === d.weekday);
+                        const breaks = schedule.breaks.map((b, i) => ({ b, i })).filter(x => x.b.weekday === d.weekday);
                         return (
-                            <div key={d.weekday} className="py-3">
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <label className="flex w-32 items-center gap-2 text-sm font-semibold text-primary">
-                                        <input
-                                            type="checkbox"
-                                            className="size-4"
-                                            checked={d.is_open}
-                                            onChange={e => setDay(d.weekday, { is_open: e.target.checked })}
-                                        />
-                                        {WEEKDAYS[d.weekday]}
-                                    </label>
-                                    {d.is_open ? (
-                                        <div className="flex items-center gap-2 text-sm">
-                                            <NativeInput type="time" className="w-28" value={d.start_time} onChange={e => setDay(d.weekday, { start_time: e.target.value })} aria-label="Ouverture" />
-                                            <span className="text-tertiary">à</span>
-                                            <NativeInput type="time" className="w-28" value={d.end_time} onChange={e => setDay(d.weekday, { end_time: e.target.value })} aria-label="Fermeture" />
-                                        </div>
-                                    ) : (
-                                        <span className="text-sm text-tertiary">Fermé</span>
-                                    )}
+                            <div key={d.weekday} className="grid gap-3 py-4 md:grid-cols-[160px_1fr] md:items-start">
+                                <div className="flex items-center gap-3">
+                                    <Toggle checked={d.is_open} onChange={v => setDay(d.weekday, { is_open: v })} label={`Ouvert le ${WEEKDAYS[d.weekday]}`} />
+                                    <span className={cn("font-display font-semibold", !d.is_open && "text-kx-muted")}>{WEEKDAYS[d.weekday]}</span>
                                 </div>
-                                {d.is_open && (
-                                    <div className="mt-2 space-y-2 sm:pl-32">
-                                        {breaks.map(({ b, i }) => (
-                                            <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                                                <span className="text-tertiary">Pause</span>
-                                                <NativeInput type="time" className="w-28" value={b.start_time} onChange={e => setBreak(i, { start_time: e.target.value })} aria-label="Début de pause" />
-                                                <span className="text-tertiary">à</span>
-                                                <NativeInput type="time" className="w-28" value={b.end_time} onChange={e => setBreak(i, { end_time: e.target.value })} aria-label="Fin de pause" />
-                                                <button
-                                                    type="button"
-                                                    className="rounded-md p-2 text-fg-error-secondary hover:bg-error-primary"
-                                                    aria-label="Supprimer la pause"
-                                                    onClick={() => setSchedule({ ...schedule, breaks: schedule.breaks.filter((_, j) => j !== i) })}
-                                                >
-                                                    <Trash01 className="size-4" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                        <button
-                                            type="button"
-                                            className="inline-flex items-center gap-1 text-sm font-semibold text-brand-secondary"
-                                            onClick={() =>
-                                                setSchedule({
-                                                    ...schedule,
-                                                    breaks: [...schedule.breaks, { weekday: d.weekday, start_time: "13:00", end_time: "14:00", label: "Pause" }],
-                                                })
-                                            }
-                                        >
-                                            <Plus className="size-4" /> Ajouter une pause
-                                        </button>
+                                {d.is_open ? (
+                                    <div className="space-y-2.5">
+                                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                                            <input type="time" className="input w-32" value={d.start_time} onChange={e => setDay(d.weekday, { start_time: e.target.value })} aria-label="Ouverture" />
+                                            <span className="text-kx-muted">→</span>
+                                            <input type="time" className="input w-32" value={d.end_time} onChange={e => setDay(d.weekday, { end_time: e.target.value })} aria-label="Fermeture" />
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {breaks.map(({ b, i }) => (
+                                                <span key={i} className="inline-flex items-center gap-1 rounded-full border border-kx-border bg-kx-bg py-1 pr-1 pl-3 text-sm">
+                                                    <span className="text-kx-muted">Pause</span>
+                                                    <input type="time" className="w-[5.5rem] bg-transparent px-1 text-sm outline-none" value={b.start_time} onChange={e => setBreak(i, { start_time: e.target.value })} aria-label="Début de pause" />
+                                                    <span className="text-kx-muted">–</span>
+                                                    <input type="time" className="w-[5.5rem] bg-transparent px-1 text-sm outline-none" value={b.end_time} onChange={e => setBreak(i, { end_time: e.target.value })} aria-label="Fin de pause" />
+                                                    <button
+                                                        type="button"
+                                                        className="grid h-7 w-7 place-items-center rounded-full text-kx-muted hover:bg-red-50 hover:text-red-700"
+                                                        aria-label="Supprimer la pause"
+                                                        onClick={() => edit({ ...schedule, breaks: schedule.breaks.filter((_, j) => j !== i) })}
+                                                    >
+                                                        <IconTrash className="h-4 w-4" />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-kx-border px-3 py-1.5 text-sm font-medium text-kx-muted hover:border-black/30 hover:text-black"
+                                                onClick={() => edit({ ...schedule, breaks: [...schedule.breaks, { weekday: d.weekday, start_time: "13:00", end_time: "14:00", label: "Pause" }] })}
+                                            >
+                                                <IconPlus className="h-4 w-4" /> Pause
+                                            </button>
+                                        </div>
                                     </div>
+                                ) : (
+                                    <p className="text-sm text-kx-muted md:pt-1">Fermé</p>
                                 )}
                             </div>
                         );
                     })}
             </div>
-            <FormError message={error} />
-            <Button className="mt-4" size="md" isLoading={saving} onClick={save}>
-                Enregistrer les horaires
-            </Button>
-        </Card>
+            <ErrorBox message={error} />
+        </div>
     );
 }
 
@@ -163,10 +146,7 @@ function BlockedPeriods() {
         try {
             const res = await barberAdminApi.createBlocked({ start_at: toIso(start), end_at: toIso(end), reason: reason.trim() || null });
             if (res.confirmed_bookings_in_period > 0) {
-                toast.warning(
-                    `Attention : ${res.confirmed_bookings_in_period} rendez-vous confirmé(s) sur cette période. Pensez à les annuler ou à prévenir les clients.`,
-                    { duration: 10000 }
-                );
+                toast.warning(`Attention : ${res.confirmed_bookings_in_period} rendez-vous confirmé(s) sur cette période. Pensez à les annuler ou à prévenir les clients.`, { duration: 10000 });
             } else {
                 toast.success("Période bloquée");
             }
@@ -191,53 +171,54 @@ function BlockedPeriods() {
     }
 
     return (
-        <Card>
-            <SectionTitle>Dates bloquées</SectionTitle>
-            <form onSubmit={add} className="grid gap-3 sm:grid-cols-4 sm:items-end">
-                <div>
-                    <FieldLabel htmlFor="b-start">Du</FieldLabel>
-                    <NativeInput id="b-start" type="datetime-local" value={start} onChange={e => setStart(e.target.value)} required />
-                </div>
-                <div>
-                    <FieldLabel htmlFor="b-end">Au</FieldLabel>
-                    <NativeInput id="b-end" type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} required />
-                </div>
-                <div>
-                    <FieldLabel htmlFor="b-reason">Motif</FieldLabel>
-                    <NativeInput id="b-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="Congé, voyage…" maxLength={200} />
-                </div>
-                <Button type="submit" size="md" isLoading={saving}>
-                    Bloquer
-                </Button>
+        <div className="card">
+            <p className="font-display text-lg font-semibold">Dates bloquées</p>
+            <p className="mb-4 text-sm text-kx-muted">Congés, voyages, demi-journées : aucun créneau n’est proposé sur ces périodes.</p>
+            <form onSubmit={add} className="grid gap-3 rounded-2xl bg-kx-bg p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+                <Field label="Du" htmlFor="b-start">
+                    <input id="b-start" className="input" type="datetime-local" value={start} onChange={e => setStart(e.target.value)} required />
+                </Field>
+                <Field label="Au" htmlFor="b-end">
+                    <input id="b-end" className="input" type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} required />
+                </Field>
+                <Field label="Motif" htmlFor="b-reason">
+                    <input id="b-reason" className="input" value={reason} onChange={e => setReason(e.target.value)} placeholder="Congé, voyage…" maxLength={200} />
+                </Field>
+                <button type="submit" className="btn" disabled={saving}>
+                    {saving && <Spinner />} Bloquer
+                </button>
             </form>
-            <FormError message={error} />
+            <div className="mt-3">
+                <ErrorBox message={error} />
+            </div>
             <div className="mt-4 space-y-2">
-                {rows?.length === 0 && <Empty>Aucune date bloquée à venir.</Empty>}
+                {rows === null && <Loading />}
+                {rows?.length === 0 && <Empty title="Aucune date bloquée à venir" />}
                 {rows?.map(b => (
-                    <div key={b.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary px-3 py-2 text-sm">
-                        <div>
-                            <p className="font-medium text-primary">
+                    <div key={b.id} className="flex items-center gap-3 rounded-2xl border border-kx-border px-4 py-3">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-kx-panel2">
+                            <IconCalendar className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1 text-sm">
+                            <p className="font-medium">
                                 {formatDateTime(b.start_at)} → {formatDateTime(b.end_at)}
                             </p>
-                            {b.reason && <p className="text-tertiary">{b.reason}</p>}
+                            {b.reason && <p className="text-kx-muted">{b.reason}</p>}
                         </div>
-                        <Button size="sm" variant="tertiary-destructive" onClick={() => remove(b.id)}>
+                        <button type="button" className="btn-danger btn-sm" onClick={() => remove(b.id)}>
                             Retirer
-                        </Button>
+                        </button>
                     </div>
                 ))}
             </div>
-        </Card>
+        </div>
     );
 }
 
 export default function AvailabilityPage() {
     return (
         <>
-            <PageHeader
-                title="Disponibilités"
-                description="Vos horaires, pauses et jours bloqués. Les clients ne voient que les créneaux libres."
-            />
+            <PageHeader title="Disponibilités" sub="Vos horaires, pauses et jours bloqués. Les clients ne voient que les créneaux libres." />
             <div className="space-y-6">
                 <ScheduleEditor />
                 <BlockedPeriods />

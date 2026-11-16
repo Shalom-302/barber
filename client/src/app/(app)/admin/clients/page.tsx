@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ContactButtons, Empty, NativeInput, Spinner } from "@/components/barber/ui";
-import { PageHeader } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
-import { errorMessage, type Page } from "@/lib/api/client";
+import { IconPin, IconSearch } from "@/components/kx/icons";
+import { ContactButtons, Empty, ErrorBox, Loading, PageHeader, Pager } from "@/components/kx/ui";
 import { barberAdminApi, type Client } from "@/lib/api/barber";
+import { errorMessage, type Page } from "@/lib/api/client";
 import { formatDateTime, formatPhone } from "@/lib/barber/format";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+
+function initials(name?: string | null) {
+    return (name || "?").trim().slice(0, 2).toUpperCase();
+}
 
 export default function AdminClientsPage() {
     const [q, setQ] = useState("");
@@ -34,62 +37,92 @@ export default function AdminClientsPage() {
     }, [load]);
     useEffect(() => setPage(1), [query]);
 
-    const totalPages = Math.max(1, data?.total_pages ?? 1);
-
     return (
         <>
-            <PageHeader title="Clients" description="Les clients ayant déjà réservé." />
-            <NativeInput
-                type="search"
-                className="mb-4 sm:max-w-sm"
-                value={q}
-                onChange={e => setQ(e.target.value)}
-                placeholder="Pseudo ou numéro…"
-            />
-            {error && <p className="text-sm text-error-primary">{error}</p>}
-            {loading && !data && <Spinner />}
-            {data && data.items.length === 0 && <Empty>Aucun client.</Empty>}
-            <div className="grid gap-3 md:grid-cols-2">
+            <PageHeader title="Clients" sub="Les clients ayant déjà réservé, avec leur dernière adresse." />
+            <div className="relative mb-5 sm:max-w-sm">
+                <IconSearch className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-kx-muted" />
+                <input type="search" className="input pl-10" value={q} onChange={e => setQ(e.target.value)} placeholder="Pseudo ou numéro…" />
+            </div>
+            <ErrorBox message={error} onRetry={load} />
+            {loading && !data && <Loading />}
+            {data && data.items.length === 0 && <Empty title="Aucun client">Les clients apparaissent ici après leur première réservation.</Empty>}
+
+            {/* Desktop table */}
+            {data && data.items.length > 0 && (
+                <div className="card hidden overflow-hidden p-0 md:block sm:p-0">
+                    <table className="kx-table">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Dernière adresse</th>
+                                <th>Réservations</th>
+                                <th>Dernier rendez-vous</th>
+                                <th className="text-right">Contact</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {data.items.map(c => (
+                                <tr key={c.id}>
+                                    <td>
+                                        <div className="flex items-center gap-3">
+                                            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-kx-panel2 text-xs font-semibold">{initials(c.pseudo)}</span>
+                                            <div>
+                                                <p className="font-medium">{c.pseudo || "Sans pseudo"}</p>
+                                                <p className="text-xs text-kx-muted">{formatPhone(c.phone)}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="max-w-64">
+                                        {c.last_commune ? (
+                                            <>
+                                                <p className="font-medium">{c.last_commune}, {c.last_quartier}</p>
+                                                <p className="truncate text-xs text-kx-muted">{c.last_address}</p>
+                                            </>
+                                        ) : "—"}
+                                    </td>
+                                    <td>
+                                        <b>{c.bookings_total}</b> <span className="text-kx-muted">· {c.bookings_completed} terminée(s)</span>
+                                    </td>
+                                    <td className="text-kx-muted">{formatDateTime(c.last_booking_at)}</td>
+                                    <td>
+                                        <ContactButtons small className="justify-end" whatsappUrl={c.whatsapp_url} callUrl={c.call_url} />
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* Mobile cards */}
+            <div className="grid gap-3 md:hidden">
                 {data?.items.map(c => (
-                    <div key={c.id} className="rounded-xl border border-secondary bg-primary p-4 shadow-xs">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                                <p className="font-semibold text-primary">{c.pseudo || "Sans pseudo"}</p>
-                                <p className="text-sm text-tertiary">{formatPhone(c.phone)}</p>
+                    <div key={c.id} className="rounded-2xl border border-kx-border bg-white p-4 shadow-card">
+                        <div className="flex items-center gap-3">
+                            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-kx-panel2 text-sm font-semibold">{initials(c.pseudo)}</span>
+                            <div className="min-w-0 flex-1">
+                                <p className="font-display font-semibold">{c.pseudo || "Sans pseudo"}</p>
+                                <p className="text-sm text-kx-muted">{formatPhone(c.phone)}</p>
                             </div>
-                            <p className="text-right text-xs text-tertiary">
-                                {c.bookings_total} réservation(s)
-                                <br />
-                                {c.bookings_completed} terminée(s)
+                            <p className="text-right text-xs text-kx-muted">
+                                <b className="block text-base text-kx-text">{c.bookings_total}</b>résa.
                             </p>
                         </div>
                         {c.last_commune && (
-                            <p className="mt-2 text-sm text-secondary">
-                                {c.last_commune}, {c.last_quartier} — {c.last_address}
+                            <p className="mt-3 flex gap-2 rounded-xl bg-kx-bg px-3 py-2 text-sm">
+                                <IconPin className="mt-0.5 h-4 w-4 shrink-0 text-kx-muted" />
+                                <span className="min-w-0 break-words">
+                                    {c.last_commune}, {c.last_quartier} — {c.last_address}
+                                </span>
                             </p>
                         )}
-                        <p className="mt-1 text-xs text-quaternary">Dernier rendez-vous : {formatDateTime(c.last_booking_at)}</p>
-                        <div className="mt-3">
-                            <ContactButtons size="sm" whatsappUrl={c.whatsapp_url} callUrl={c.call_url} />
-                        </div>
+                        <p className="mt-2 text-xs text-kx-muted">Dernier rendez-vous : {formatDateTime(c.last_booking_at)}</p>
+                        <ContactButtons small className="mt-3" whatsappUrl={c.whatsapp_url} callUrl={c.call_url} />
                     </div>
                 ))}
             </div>
-            {data && data.total > 0 && (
-                <div className="mt-6 flex items-center justify-between text-sm text-tertiary">
-                    <span>
-                        Page {page} / {totalPages} · {data.total} au total
-                    </span>
-                    <div className="flex gap-2">
-                        <Button variant="secondary" size="sm" isDisabled={page <= 1} onClick={() => setPage(page - 1)}>
-                            Précédent
-                        </Button>
-                        <Button variant="secondary" size="sm" isDisabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                            Suivant
-                        </Button>
-                    </div>
-                </div>
-            )}
+            {data && <Pager page={page} totalPages={Math.max(1, data.total_pages)} onPage={setPage} />}
         </>
     );
 }

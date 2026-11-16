@@ -3,15 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
-import { FieldLabel, FormError } from "@/components/auth/auth-card";
-import { Card, Empty, NativeInput, Spinner, TextareaField } from "@/components/barber/ui";
-import { PageHeader } from "@/components/layout/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
-import { errorMessage } from "@/lib/api/client";
+import { IconClock, IconPlus, IconScissors } from "@/components/kx/icons";
+import { Empty, ErrorBox, Field, Loading, Modal, PageHeader, Spinner, Toggle } from "@/components/kx/ui";
 import { barberAdminApi, type Service, type ServiceInput } from "@/lib/api/barber";
+import { errorMessage } from "@/lib/api/client";
 import { formatDuration, formatPrice } from "@/lib/barber/format";
+import { cn } from "@/lib/utils/cn";
 
 type Draft = ServiceInput & { id?: number };
 const EMPTY: Draft = { name: "", price: 0, duration_minutes: 45, description: "", is_active: true, sort_order: 0 };
@@ -55,10 +52,20 @@ export default function AdminServicesPage() {
     }
 
     async function remove(s: Service) {
-        if (!window.confirm(`Supprimer « ${s.name} » ? Si elle a déjà été réservée, elle sera seulement désactivée.`)) return;
+        if (!window.confirm(`Supprimer « ${s.name} » ? Si elle a déjà été réservée, elle sera seulement masquée.`)) return;
         try {
             await barberAdminApi.deleteService(s.id);
-            toast.success("Prestation supprimée ou désactivée");
+            toast.success("Prestation supprimée ou masquée");
+            load();
+        } catch (err) {
+            toast.error(errorMessage(err));
+        }
+    }
+
+    async function toggle(s: Service) {
+        try {
+            const { id, ...rest } = s;
+            await barberAdminApi.updateService(id, { ...rest, is_active: !s.is_active });
             load();
         } catch (err) {
             toast.error(errorMessage(err));
@@ -68,101 +75,85 @@ export default function AdminServicesPage() {
     return (
         <>
             <PageHeader
-                title="Prestations"
-                description="Vos prestations et leurs tarifs, affichés aux clients. Un changement de prix ne modifie pas les réservations déjà faites."
-                action={
-                    <Button size="md" onClick={() => { setError(null); setDraft({ ...EMPTY }); }}>
-                        Nouvelle prestation
-                    </Button>
+                title="Prestations & tarifs"
+                sub="Affichés aux clients. Un changement de prix ne modifie pas les réservations déjà faites."
+                actions={
+                    <button type="button" className="btn" onClick={() => { setError(null); setDraft({ ...EMPTY }); }}>
+                        <IconPlus className="h-4 w-4" /> Nouvelle prestation
+                    </button>
                 }
             />
-            {!rows && <Spinner />}
-            {rows?.length === 0 && <Empty>Aucune prestation.</Empty>}
+            {!rows && <Loading />}
+            {rows?.length === 0 && <Empty title="Aucune prestation">Créez votre première prestation pour ouvrir les réservations.</Empty>}
             <div className="grid gap-3 md:grid-cols-2">
                 {rows?.map(s => (
-                    <Card key={s.id}>
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <p className="font-semibold text-primary">{s.name}</p>
-                                <p className="text-sm text-tertiary">
-                                    {formatDuration(s.duration_minutes)} · ordre {s.sort_order}
+                    <div key={s.id} className={cn("flex flex-col rounded-2xl border border-kx-border bg-white p-5 shadow-card", !s.is_active && "opacity-60")}>
+                        <div className="flex items-start gap-4">
+                            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kx-panel2">
+                                <IconScissors className="h-5 w-5" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                                <p className="font-display text-lg font-semibold">{s.name}</p>
+                                <p className="flex items-center gap-1.5 text-sm text-kx-muted">
+                                    <IconClock className="h-4 w-4" /> {formatDuration(s.duration_minutes)} · ordre {s.sort_order}
                                 </p>
                             </div>
-                            <div className="text-right">
-                                <p className="font-bold text-brand-secondary">{formatPrice(s.price)}</p>
-                                <Badge size="sm" color={s.is_active ? "success" : "gray"}>
-                                    {s.is_active ? "Active" : "Masquée"}
-                                </Badge>
-                            </div>
+                            <p className="font-display text-2xl font-semibold whitespace-nowrap">{formatPrice(s.price)}</p>
                         </div>
-                        {s.description && <p className="mt-2 text-sm text-secondary">{s.description}</p>}
-                        <div className="mt-4 flex gap-2">
-                            <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => {
-                                    setError(null);
-                                    setDraft({ ...s, description: s.description ?? "" });
-                                }}
-                            >
+                        {s.description && <p className="mt-3 text-sm text-kx-muted">{s.description}</p>}
+                        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-kx-border pt-4">
+                            <label className="mr-auto flex items-center gap-2 text-sm">
+                                <Toggle checked={s.is_active} onChange={() => toggle(s)} label="Visible par les clients" />
+                                {s.is_active ? "Visible" : "Masquée"}
+                            </label>
+                            <button type="button" className="btn-ghost btn-sm" onClick={() => { setError(null); setDraft({ ...s, description: s.description ?? "" }); }}>
                                 Modifier
-                            </Button>
-                            <Button size="sm" variant="tertiary-destructive" onClick={() => remove(s)}>
+                            </button>
+                            <button type="button" className="btn-danger btn-sm" onClick={() => remove(s)}>
                                 Supprimer
-                            </Button>
+                            </button>
                         </div>
-                    </Card>
+                    </div>
                 ))}
             </div>
 
-            <Dialog
-                open={draft !== null}
-                onOpenChange={open => !open && setDraft(null)}
-                title={draft?.id ? "Modifier la prestation" : "Nouvelle prestation"}
-                content={
-                    draft && (
-                        <form onSubmit={save} className="space-y-4">
-                            <div>
-                                <FieldLabel htmlFor="s-name">Nom</FieldLabel>
-                                <NativeInput id="s-name" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} required minLength={2} maxLength={120} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <FieldLabel htmlFor="s-price">Prix (FCFA)</FieldLabel>
-                                    <NativeInput id="s-price" type="number" inputMode="numeric" min={0} step={500} value={draft.price} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} required />
-                                </div>
-                                <div>
-                                    <FieldLabel htmlFor="s-duration">Durée (min)</FieldLabel>
-                                    <NativeInput id="s-duration" type="number" min={5} max={600} step={5} value={draft.duration_minutes} onChange={e => setDraft({ ...draft, duration_minutes: Number(e.target.value) })} required />
-                                </div>
-                            </div>
-                            <div>
-                                <FieldLabel htmlFor="s-desc">Description</FieldLabel>
-                                <TextareaField id="s-desc" value={draft.description ?? ""} onChange={e => setDraft({ ...draft, description: e.target.value })} maxLength={500} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <FieldLabel htmlFor="s-order">Ordre d&apos;affichage</FieldLabel>
-                                    <NativeInput id="s-order" type="number" value={draft.sort_order} onChange={e => setDraft({ ...draft, sort_order: Number(e.target.value) })} />
-                                </div>
-                                <label className="flex items-end gap-2 pb-3 text-sm font-medium text-secondary">
-                                    <input type="checkbox" className="size-4" checked={draft.is_active} onChange={e => setDraft({ ...draft, is_active: e.target.checked })} />
-                                    Visible par les clients
-                                </label>
-                            </div>
-                            <FormError message={error} />
-                            <div className="flex justify-end gap-2">
-                                <Button variant="secondary" size="md" onClick={() => setDraft(null)}>
-                                    Annuler
-                                </Button>
-                                <Button type="submit" size="md" isLoading={saving}>
-                                    Enregistrer
-                                </Button>
-                            </div>
-                        </form>
-                    )
-                }
-            />
+            <Modal open={draft !== null} onClose={() => setDraft(null)} title={draft?.id ? "Modifier la prestation" : "Nouvelle prestation"}>
+                {draft && (
+                    <form onSubmit={save} className="space-y-4">
+                        <Field label="Nom" htmlFor="s-name">
+                            <input id="s-name" className="input" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} required minLength={2} maxLength={120} autoFocus />
+                        </Field>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Field label="Prix (FCFA)" htmlFor="s-price">
+                                <input id="s-price" className="input" type="number" inputMode="numeric" min={0} step={500} value={draft.price} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} required />
+                            </Field>
+                            <Field label="Durée (min)" htmlFor="s-duration">
+                                <input id="s-duration" className="input" type="number" min={5} max={600} step={5} value={draft.duration_minutes} onChange={e => setDraft({ ...draft, duration_minutes: Number(e.target.value) })} required />
+                            </Field>
+                        </div>
+                        <Field label="Description" htmlFor="s-desc">
+                            <textarea id="s-desc" className="input min-h-20" value={draft.description ?? ""} onChange={e => setDraft({ ...draft, description: e.target.value })} maxLength={500} />
+                        </Field>
+                        <div className="grid grid-cols-2 items-end gap-3">
+                            <Field label="Ordre d’affichage" htmlFor="s-order">
+                                <input id="s-order" className="input" type="number" value={draft.sort_order} onChange={e => setDraft({ ...draft, sort_order: Number(e.target.value) })} />
+                            </Field>
+                            <label className="flex items-center gap-2 pb-2.5 text-sm font-medium">
+                                <Toggle checked={draft.is_active} onChange={v => setDraft({ ...draft, is_active: v })} label="Visible par les clients" /> Visible
+                            </label>
+                        </div>
+                        <ErrorBox message={error} />
+                        <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+                            <button type="button" className="btn-ghost" onClick={() => setDraft(null)}>
+                                Annuler
+                            </button>
+                            <button type="submit" className="btn" disabled={saving}>
+                                {saving && <Spinner />} Enregistrer
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </Modal>
         </>
     );
 }

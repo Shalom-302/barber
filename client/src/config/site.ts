@@ -1,20 +1,20 @@
 // Central app configuration: name, branding and navigation.
 import type { ComponentType } from "react";
+import { BRAND_NAME } from "./brand";
 import {
-    Home01,
-    User01,
-    Users01,
-    ShieldTick,
-    ClipboardCheck,
-    BarChartSquare02,
-    Calendar,
-    CalendarCheck01,
-    Scissors01,
-    Clock,
-    Settings01,
-    MessageNotificationCircle,
-    UsersRight,
-} from "@untitled-ui/icons-react";
+    IconBell,
+    IconCalendar,
+    IconCalendarCheck,
+    IconChart,
+    IconClock,
+    IconFile,
+    IconHome,
+    IconScissors,
+    IconSettings,
+    IconShield,
+    IconUser,
+    IconUsers,
+} from "@/components/kx/icons";
 
 export type NavItem = {
     name: string;
@@ -23,31 +23,32 @@ export type NavItem = {
 };
 
 export const siteConfig = {
-    name: "Barber",
+    name: BRAND_NAME,
+    tagline: "Coiffure à domicile · Abidjan",
     description: "Réservez votre barbier à domicile à Abidjan, confirmation sur WhatsApp.",
     locale: "fr",
     // API path, served on the same origin and proxied by the Next server.
     apiBasePath: "/admin/api/v1",
     nav: {
         user: [
-            { name: "Accueil", href: "/", icon: Home01 },
-            { name: "Réserver", href: "/reserver", icon: Calendar },
-            { name: "Mes rendez-vous", href: "/mes-rendez-vous", icon: CalendarCheck01 },
-            { name: "Profil", href: "/profile", icon: User01 },
+            { name: "Accueil", href: "/", icon: IconHome },
+            { name: "Réserver", href: "/reserver", icon: IconCalendar },
+            { name: "Rendez-vous", href: "/mes-rendez-vous", icon: IconCalendarCheck },
+            { name: "Profil", href: "/profile", icon: IconUser },
         ] satisfies NavItem[],
         admin: [
-            { name: "Tableau de bord", href: "/admin", icon: BarChartSquare02 },
-            { name: "Réservations", href: "/admin/reservations", icon: CalendarCheck01 },
-            { name: "Clients", href: "/admin/clients", icon: UsersRight },
-            { name: "Prestations", href: "/admin/prestations", icon: Scissors01 },
-            { name: "Disponibilités", href: "/admin/disponibilites", icon: Clock },
-            { name: "Réglages", href: "/admin/reglages", icon: Settings01 },
-            { name: "Notifications", href: "/admin/notifications", icon: MessageNotificationCircle },
+            { name: "Tableau de bord", href: "/admin", icon: IconChart },
+            { name: "Réservations", href: "/admin/reservations", icon: IconCalendarCheck },
+            { name: "Clients", href: "/admin/clients", icon: IconUsers },
+            { name: "Prestations", href: "/admin/prestations", icon: IconScissors },
+            { name: "Disponibilités", href: "/admin/disponibilites", icon: IconClock },
+            { name: "Réglages", href: "/admin/reglages", icon: IconSettings },
+            { name: "Notifications", href: "/admin/notifications", icon: IconBell },
         ] satisfies NavItem[],
         system: [
-            { name: "Utilisateurs", href: "/admin/users", icon: Users01 },
-            { name: "Rôles", href: "/admin/roles", icon: ShieldTick },
-            { name: "Journaux", href: "/admin/logs", icon: ClipboardCheck },
+            { name: "Utilisateurs", href: "/admin/users", icon: IconUser },
+            { name: "Rôles", href: "/admin/roles", icon: IconShield },
+            { name: "Journaux", href: "/admin/logs", icon: IconFile },
         ] satisfies NavItem[],
     },
 };

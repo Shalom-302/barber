@@ -4,11 +4,10 @@
 // API (3-30 characters, unique ignoring case): its message is shown as is.
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { IconArrow } from "@/components/kx/icons";
+import { ErrorBox, Spinner } from "@/components/kx/ui";
 import { errorMessage } from "@/lib/api/client";
 import { authApi } from "@/lib/api/services";
-import { FieldLabel, FormError } from "./auth-card";
 
 export function PseudoForm({ initial = "", onDone }: { initial?: string; onDone: () => void | Promise<void> }) {
     const [pseudo, setPseudo] = useState(initial);
@@ -32,9 +31,12 @@ export function PseudoForm({ initial = "", onDone }: { initial?: string; onDone:
     return (
         <form onSubmit={submit} className="space-y-5">
             <div>
-                <FieldLabel htmlFor="pseudo">Votre pseudo</FieldLabel>
-                <Input
+                <label className="label" htmlFor="pseudo">
+                    Votre pseudo
+                </label>
+                <input
                     id="pseudo"
+                    className="input py-3.5 text-lg sm:text-base"
                     value={pseudo}
                     onChange={e => setPseudo(e.target.value)}
                     placeholder="Ex. Koffi225"
@@ -43,16 +45,13 @@ export function PseudoForm({ initial = "", onDone }: { initial?: string; onDone:
                     maxLength={30}
                     required
                     autoFocus
-                    size="md"
                 />
-                <p className="mt-1.5 text-sm text-tertiary">
-                    C&apos;est le nom que verra le barbier. 3 à 30 caractères.
-                </p>
+                <p className="hint">C’est le nom que verra le barbier. 3 à 30 caractères.</p>
             </div>
-            <FormError message={error} />
-            <Button type="submit" size="lg" className="w-full" isLoading={loading}>
-                Continuer
-            </Button>
+            <ErrorBox message={error} />
+            <button type="submit" className="btn btn-lg w-full" disabled={loading || pseudo.trim().length < 3}>
+                {loading ? <Spinner /> : <IconArrow className="h-5 w-5" />} Continuer
+            </button>
         </form>
     );
 }
