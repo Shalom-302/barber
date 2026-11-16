@@ -1,11 +1,9 @@
 "use client";
 
-// Authenticated area: clients get the light client shell, the barber
-// (/admin/*) gets the dashboard shell. Anonymous visitors go to the login page.
+// Authenticated area: one sidebar shell for clients and the barber (/admin/*). Anonymous visitors go to the login page.
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AdminShell } from "@/components/kx/admin-shell";
-import { ClientShell } from "@/components/kx/client-shell";
+import { AppShell } from "@/components/kx/app-shell";
 import { Spinner } from "@/components/kx/ui";
 import { useAuth } from "@/lib/auth/auth-context";
 
@@ -25,6 +23,5 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
         );
     }
-    if (path.startsWith("/admin")) return <AdminShell>{children}</AdminShell>;
-    return <ClientShell>{children}</ClientShell>;
+    return <AppShell>{children}</AppShell>;
 }

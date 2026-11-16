@@ -3,10 +3,18 @@
    (booking statuses, success/error). */
 
 @theme {
-    --color-kx-bg: #f7f7f7;
+    /* Barbershop identity: ink sidebar, cream canvas, brass accent. */
+    --color-ink: #0b0b0c;
+    --color-ink2: #141416;
+    --color-cream: #f4efe7;
+    --color-brass: #c8a96a;
+    --color-brass-dark: #a8874a;
+    --color-brass-soft: #f1e7d2;
+
+    --color-kx-bg: #f4efe7;
     --color-kx-panel: #ffffff;
-    --color-kx-panel2: #f4f4f5;
-    --color-kx-border: #e4e4e7;
+    --color-kx-panel2: #f3eee6;
+    --color-kx-border: #e7dfd2;
     --color-kx-text: #0a0a0a;
     --color-kx-muted: #5f5f66;
     --color-kx-accent: #0a0a0a;
@@ -131,6 +139,20 @@
     }
     .kx-table tbody tr:last-child td {
         @apply border-b-0;
+    }
+    /* Condensed display type (Anton) for page titles, prices, dates. */
+    .font-barber {
+        font-family: var(--font-barber), Impact, "Arial Narrow", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+    .btn-brass {
+        @apply inline-flex items-center justify-center gap-2 rounded-full bg-brass px-4 py-2.5 text-center text-sm font-semibold text-ink transition hover:bg-[#d6ba80] disabled:cursor-not-allowed disabled:opacity-50 sm:px-5;
+    }
+    .btn-line-dark {
+        @apply inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-4 py-2.5 text-center text-sm font-medium text-cream transition hover:border-cream/60 hover:bg-white/5;
     }
     .nav-scrolled {
         border-color: var(--color-kx-border);

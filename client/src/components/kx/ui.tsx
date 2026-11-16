@@ -56,7 +56,8 @@ export function PageHeader({ title, sub, actions }: { title: string; sub?: React
     return (
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8 sm:gap-4">
             <div className="min-w-0">
-                <h1 className="font-display text-2xl font-semibold break-words md:text-3xl">{title}</h1>
+                <h1 className="font-barber text-3xl break-words text-ink sm:text-4xl md:text-5xl">{title}</h1>
+                <span className="mt-3 block h-px w-14 bg-brass" aria-hidden="true" />
                 {sub && <p className="mt-1.5 text-sm break-words text-kx-muted sm:text-base">{sub}</p>}
             </div>
             {actions && <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div>}

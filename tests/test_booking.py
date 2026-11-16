@@ -351,5 +351,18 @@ async def test_settings_reject_mojibake(http):
                        json={**current, 'communes': ['AdjamÃ©']})
     assert r.status_code == 422
     r = await http.put('/barber-admin/settings', headers=admin['headers'],
-                       json={**current, 'communes': ['Adjamé', 'Port-Bouët']})
-    assert r.status_code == 200 and r.json()['data']['communes'] == ['Adjamé', 'Port-Bouët']
+                       json={**current, 'communes': ['Cocody', 'Adjamé', 'Port-Bouët']})
+    assert r.status_code == 200 and r.json()['data']['communes'] == ['Cocody', 'Adjamé', 'Port-Bouët']
+    await http.put('/barber-admin/settings', headers=admin['headers'], json=current)  # restore
+
+
+async def test_admin_clients_list(http):
+    admin = await make_admin(http)
+    who = await login(http, pseudo='ClientListe')
+    b = await _book(http, who, await first_slot(http, day=next_open_day(13)))
+    assert b.status_code == 200, b.text
+    r = await http.get('/barber-admin/clients', params={'q': 'ClientListe'}, headers=admin['headers'])
+    assert r.status_code == 200, r.text
+    items = r.json()['data']['items']
+    assert len(items) == 1 and items[0]['bookings_total'] == 1
+    assert items[0]['last_commune'] == 'Cocody' and items[0]['whatsapp_url'].startswith('https://wa.me/225')

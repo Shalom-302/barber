@@ -7,8 +7,8 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ClientShell } from "@/components/kx/client-shell";
-import { IconArrow, IconArrowLeft, IconCheck, IconClock, IconPin, IconScissors, IconWhatsapp } from "@/components/kx/icons";
+import { AppShell } from "@/components/kx/app-shell";
+import { IconArrow, IconArrowLeft, IconCheck, IconClock, IconPin, IconWhatsapp } from "@/components/kx/icons";
 import { ErrorBox, Loading, Spinner, StatusBadge } from "@/components/kx/ui";
 import { barberApi, type Booking, type PublicProfile, type Service, type Slot } from "@/lib/api/barber";
 import { ApiError, errorMessage } from "@/lib/api/client";
@@ -31,6 +31,21 @@ const EMPTY: Draft = { serviceId: null, day: null, startAt: null, commune: "", q
 const DRAFT_KEY = "barber:booking-draft";
 const STEPS = ["Prestation", "Date & heure", "Adresse", "Récapitulatif"];
 const PREFETCH_DAYS = 14;
+
+// Illustration per service (the barber's own photos can replace these files).
+const SERVICE_PHOTOS = [
+    "/images/landing/clippers.webp",
+    "/images/landing/barber-clipper.webp",
+    "/images/landing/beard-razor.webp",
+    "/images/landing/barber-waves.webp",
+];
+function servicePhoto(s: Service, index: number): string {
+    const n = s.name.toLowerCase();
+    if (n.includes("barbier")) return "/images/landing/barber-clipper.webp";
+    if (n.includes("client")) return "/images/landing/clippers.webp";
+    if (n.includes("barbe")) return "/images/landing/beard-razor.webp";
+    return SERVICE_PHOTOS[index % SERVICE_PHOTOS.length];
+}
 
 function loadDraft(): Draft | null {
     try {
@@ -82,8 +97,8 @@ function groupSlots(slots: Slot[]) {
 function Progress({ step, onGo }: { step: number; onGo: (i: number) => void }) {
     return (
         <div className="mb-6 sm:mb-8">
-            <div className="h-1.5 overflow-hidden rounded-full bg-kx-panel2">
-                <div className="h-full rounded-full bg-black transition-all duration-500" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+            <div className="h-1 overflow-hidden rounded-full bg-ink/10">
+                <div className="h-full rounded-full bg-brass transition-all duration-500" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
             </div>
             <ol className="mt-3 grid grid-cols-4 gap-1 text-[11px] sm:text-xs">
                 {STEPS.map((label, i) => (
@@ -94,13 +109,13 @@ function Progress({ step, onGo }: { step: number; onGo: (i: number) => void }) {
                             onClick={() => onGo(i)}
                             className={cn(
                                 "flex w-full items-center gap-1.5 font-medium",
-                                i === step ? "text-black" : i < step ? "text-kx-muted hover:text-black" : "text-zinc-300"
+                                i === step ? "text-ink" : i < step ? "text-kx-muted hover:text-ink" : "text-ink/30"
                             )}
                         >
                             <span
                                 className={cn(
                                     "grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold",
-                                    i < step ? "bg-black text-white" : i === step ? "border-2 border-black" : "border border-zinc-300"
+                                    i < step ? "bg-brass text-ink" : i === step ? "border-2 border-brass text-ink" : "border border-ink/20"
                                 )}
                             >
                                 {i < step ? <IconCheck className="h-3 w-3" /> : i + 1}
@@ -270,10 +285,10 @@ function BookingFlow() {
         return (
             <div className="mx-auto max-w-xl px-4 py-10 sm:px-8 sm:py-16">
                 <div className="card text-center sm:p-10">
-                    <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-black text-white">
+                    <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-brass text-ink">
                         <IconCheck className="h-8 w-8" />
                     </span>
-                    <h1 className="mt-6 font-display text-3xl font-semibold">Demande envoyée !</h1>
+                    <h1 className="mt-6 font-barber text-5xl text-ink">Demande envoyée !</h1>
                     <p className="mt-2 text-kx-muted">Le barbier va confirmer votre rendez-vous. Vous serez prévenu sur WhatsApp.</p>
                     <div className="mt-6 flex justify-center">
                         <StatusBadge status={done.status} />
@@ -311,17 +326,19 @@ function BookingFlow() {
     const daySlots = draft.day ? availability[draft.day] : undefined;
 
     return (
-        <div className="mx-auto max-w-2xl px-4 pt-6 pb-40 sm:px-8 sm:pt-10 sm:pb-16">
+        <div className="mx-auto max-w-2xl px-4 pt-6 pb-6 sm:px-8 sm:pt-10 sm:pb-10">
             <div className="mb-6 flex items-center gap-3">
                 {step > 0 && (
-                    <button type="button" onClick={() => go(step - 1)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-kx-border bg-white hover:border-black/30" aria-label="Étape précédente">
+                    <button type="button" onClick={() => go(step - 1)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-kx-border bg-white transition hover:border-brass" aria-label="Étape précédente">
                         <IconArrowLeft className="h-5 w-5" />
                     </button>
                 )}
                 <div className="min-w-0">
-                    <p className="eyebrow">Réservation · étape {step + 1} / {STEPS.length}</p>
-                    <h1 className="font-display text-2xl font-semibold sm:text-3xl">
-                        {["Quelle prestation ?", "Quand ?", "Où ?", "On récapitule"][step]}
+                    <p className="text-[11px] font-semibold tracking-[0.28em] text-brass-dark uppercase">
+                        Réservation · étape {step + 1} / {STEPS.length}
+                    </p>
+                    <h1 className="mt-1 font-barber text-4xl text-ink sm:text-5xl">
+                        {["Quelle prestation ?", "Quel jour, quelle heure ?", "Où vous trouver ?", "On récapitule"][step]}
                     </h1>
                 </div>
             </div>
@@ -330,33 +347,46 @@ function BookingFlow() {
             {/* STEP 0: service */}
             {step === 0 && (
                 <div className="grid gap-3">
-                    {services.map(s => {
+                    {services.map((s, idx) => {
                         const on = draft.serviceId === s.id;
                         return (
                             <button
                                 key={s.id}
                                 type="button"
                                 onClick={() => update({ serviceId: s.id, startAt: null, day: null })}
+                                aria-pressed={on}
                                 className={cn(
-                                    "flex items-start gap-4 rounded-2xl border bg-white p-4 text-left transition sm:p-5",
-                                    on ? "border-black shadow-card ring-4 ring-black/5" : "border-kx-border hover:border-black/30"
+                                    "group relative flex items-stretch gap-4 overflow-hidden rounded-2xl border bg-white p-3 text-left transition sm:gap-5 sm:p-4",
+                                    on ? "border-brass shadow-card ring-4 ring-brass/20" : "border-kx-border hover:border-brass/60 hover:shadow-card"
                                 )}
                             >
-                                <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full", on ? "bg-black text-white" : "bg-kx-panel2")}>
-                                    <IconScissors className="h-5 w-5" />
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                    <span className="block font-display text-lg font-semibold">{s.name}</span>
-                                    {s.description && <span className="mt-0.5 block text-sm text-kx-muted">{s.description}</span>}
-                                    <span className="mt-2 inline-flex items-center gap-1.5 text-sm text-kx-muted">
-                                        <IconClock className="h-4 w-4" /> {formatDuration(s.duration_minutes)}
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={servicePhoto(s, idx)}
+                                    alt=""
+                                    width={240}
+                                    height={240}
+                                    loading="lazy"
+                                    className="h-24 w-24 shrink-0 rounded-xl object-cover transition duration-500 group-hover:scale-[1.03] sm:h-28 sm:w-32"
+                                />
+                                <span className="flex min-w-0 flex-1 flex-col justify-center py-1">
+                                    <span className="block font-display text-base leading-snug font-semibold text-ink sm:text-lg">{s.name}</span>
+                                    {s.description && <span className="mt-1 line-clamp-2 block text-sm text-kx-muted">{s.description}</span>}
+                                    <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                        <span className="font-barber text-2xl text-brass-dark">{formatPrice(s.price)}</span>
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-kx-muted">
+                                            <IconClock className="h-4 w-4" /> {formatDuration(s.duration_minutes)}
+                                        </span>
                                     </span>
                                 </span>
-                                <span className="shrink-0 text-right">
-                                    <span className="block font-display text-xl font-semibold whitespace-nowrap">{formatPrice(s.price)}</span>
-                                    <span className={cn("mt-2 ml-auto grid h-6 w-6 place-items-center rounded-full border-2", on ? "border-black bg-black text-white" : "border-kx-border")}>
-                                        {on && <IconCheck className="h-3.5 w-3.5" />}
-                                    </span>
+                                <span
+                                    className={cn(
+                                        "mt-1 grid h-6 w-6 shrink-0 place-items-center self-start rounded-full border-2 transition",
+                                        on ? "border-brass bg-brass text-ink" : "border-kx-border"
+                                    )}
+                                    aria-hidden="true"
+                                >
+                                    {on && <IconCheck className="h-3.5 w-3.5" />}
                                 </span>
                             </button>
                         );
@@ -381,14 +411,14 @@ function BookingFlow() {
                                         type="button"
                                         onClick={() => update({ day: d, startAt: null })}
                                         className={cn(
-                                            "flex w-16 shrink-0 flex-col items-center rounded-2xl border py-3 transition",
-                                            on ? "border-black bg-black text-white" : empty ? "border-dashed border-kx-border bg-transparent text-zinc-400" : "border-kx-border bg-white hover:border-black/30"
+                                            "flex w-[4.25rem] shrink-0 flex-col items-center rounded-2xl border py-3 transition",
+                                            on ? "border-ink bg-ink text-cream shadow-card" : empty ? "border-dashed border-ink/15 bg-transparent text-ink/30" : "border-kx-border bg-white hover:border-brass/60"
                                         )}
                                     >
-                                        <span className={cn("text-[11px] font-medium capitalize", on ? "text-white/70" : "")}>{d === days[0] ? "Auj." : p.wd}</span>
-                                        <span className="font-display text-xl font-semibold">{p.day}</span>
-                                        <span className={cn("text-[11px] capitalize", on ? "text-white/70" : "text-kx-muted")}>{p.month}</span>
-                                        <span className={cn("mt-1 h-1.5 w-1.5 rounded-full", a === "loading" || a === undefined ? "bg-zinc-200" : empty ? "bg-transparent" : on ? "bg-white" : "bg-kx-teal")} />
+                                        <span className={cn("text-[11px] font-medium capitalize", on ? "text-cream/70" : "")}>{d === days[0] ? "Auj." : p.wd}</span>
+                                        <span className="font-barber text-2xl">{p.day}</span>
+                                        <span className={cn("text-[11px] capitalize", on ? "text-cream/70" : "text-kx-muted")}>{p.month}</span>
+                                        <span className={cn("mt-1 h-1.5 w-1.5 rounded-full", a === "loading" || a === undefined ? "bg-ink/10" : empty ? "bg-transparent" : "bg-brass")} />
                                     </button>
                                 );
                             })}
@@ -412,7 +442,7 @@ function BookingFlow() {
                         {Array.isArray(daySlots) &&
                             groupSlots(daySlots).map(g => (
                                 <div key={g.label} className="mb-5">
-                                    <p className="mb-2 text-xs font-semibold tracking-wide text-kx-muted uppercase">{g.label}</p>
+                                    <p className="mb-2 text-[11px] font-semibold tracking-[0.25em] text-brass-dark uppercase">{g.label}</p>
                                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                                         {g.items.map(s => {
                                             const on = draft.startAt === s.start_at;
@@ -422,8 +452,8 @@ function BookingFlow() {
                                                     type="button"
                                                     onClick={() => update({ startAt: s.start_at })}
                                                     className={cn(
-                                                        "rounded-xl border py-3 text-center font-display text-base font-semibold transition",
-                                                        on ? "border-black bg-black text-white" : "border-kx-border bg-white hover:border-black/40"
+                                                        "rounded-xl border py-3 text-center font-barber text-xl transition",
+                                                        on ? "border-brass bg-brass text-ink shadow-card" : "border-kx-border bg-white text-ink hover:border-brass/60"
                                                     )}
                                                 >
                                                     {formatTime(s.start_at)}
@@ -457,7 +487,7 @@ function BookingFlow() {
                                     onClick={() => update({ commune: c })}
                                     className={cn(
                                         "rounded-full border px-3.5 py-2 text-sm font-medium transition",
-                                        draft.commune === c ? "border-black bg-black text-white" : "border-kx-border bg-white hover:border-black/30"
+                                        draft.commune === c ? "border-ink bg-ink text-cream" : "border-kx-border bg-white hover:border-brass/60"
                                     )}
                                 >
                                     {c}
@@ -491,23 +521,24 @@ function BookingFlow() {
             {step === 3 && service && draft.startAt && (
                 <div className="space-y-4">
                     <div className="card p-0 sm:p-0">
-                        <div className="flex items-center justify-between gap-4 border-b border-kx-border p-5 sm:p-6">
+                        <div className="flex items-center justify-between gap-4 rounded-t-xl bg-ink p-5 text-cream sm:rounded-t-2xl sm:p-6">
                             <div className="min-w-0">
-                                <p className="font-display text-lg font-semibold">{service.name}</p>
-                                <p className="text-sm text-kx-muted">{formatDuration(service.duration_minutes)}</p>
+                                <p className="text-[11px] font-semibold tracking-[0.25em] text-brass uppercase">Prestation</p>
+                                <p className="mt-1 font-display text-lg font-semibold">{service.name}</p>
+                                <p className="text-sm text-cream/60">{formatDuration(service.duration_minutes)}</p>
                             </div>
-                            <p className="font-display text-2xl font-semibold whitespace-nowrap">{formatPrice(service.price)}</p>
+                            <p className="font-barber text-3xl whitespace-nowrap text-brass">{formatPrice(service.price)}</p>
                         </div>
                         <div className="grid gap-4 p-5 text-sm sm:grid-cols-2 sm:p-6">
                             <div className="flex gap-3">
-                                <IconClock className="mt-0.5 h-5 w-5 shrink-0 text-kx-muted" />
+                                <IconClock className="mt-0.5 h-5 w-5 shrink-0 text-brass-dark" />
                                 <div>
                                     <p className="text-kx-muted">Rendez-vous</p>
                                     <p className="font-medium">{formatDateTime(draft.startAt)}</p>
                                 </div>
                             </div>
                             <div className="flex gap-3">
-                                <IconPin className="mt-0.5 h-5 w-5 shrink-0 text-kx-muted" />
+                                <IconPin className="mt-0.5 h-5 w-5 shrink-0 text-brass-dark" />
                                 <div className="min-w-0">
                                     <p className="text-kx-muted">Adresse</p>
                                     <p className="font-medium break-words">
@@ -539,19 +570,19 @@ function BookingFlow() {
             </div>
 
             {/* Sticky action bar */}
-            <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-30 border-t border-kx-border bg-white/95 backdrop-blur sm:static sm:mt-8 sm:border-0 sm:bg-transparent sm:backdrop-blur-none">
-                <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 py-3 sm:px-0 sm:py-0">
+            <div className="sticky bottom-0 z-30 -mx-4 mt-8 border-t border-kx-border bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:bottom-4 sm:mx-0 sm:rounded-2xl sm:border sm:shadow-card">
+                <div className="flex items-center gap-4 px-4 py-3 sm:px-5">
                     <div className="min-w-0 flex-1">
                         {service ? (
                             <>
                                 <p className="truncate text-xs text-kx-muted">{draft.startAt ? `${service.name} · ${formatTime(draft.startAt)}` : service.name}</p>
-                                <p className="font-display text-lg font-semibold">{formatPrice(service.price)}</p>
+                                <p className="font-barber text-2xl text-brass-dark">{formatPrice(service.price)}</p>
                             </>
                         ) : (
                             <p className="text-sm text-kx-muted">Choisissez une prestation</p>
                         )}
                     </div>
-                    <button type="button" onClick={next} disabled={!canContinue || submitting} className="btn btn-lg shrink-0">
+                    <button type="button" onClick={next} disabled={!canContinue || submitting} className="btn btn-lg shrink-0 !bg-ink hover:!bg-ink2">
                         {submitting ? <Spinner /> : null}
                         {step < 3 ? "Continuer" : isAuthenticated ? "Envoyer ma demande" : "Se connecter et envoyer"}
                         {!submitting && <IconArrow className="h-4 w-4" />}
@@ -564,10 +595,10 @@ function BookingFlow() {
 
 export default function ReserverPage() {
     return (
-        <ClientShell bare>
+        <AppShell bare>
             <Suspense fallback={<Loading />}>
                 <BookingFlow />
             </Suspense>
-        </ClientShell>
+        </AppShell>
     );
 }

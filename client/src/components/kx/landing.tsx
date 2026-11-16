@@ -95,6 +95,7 @@ export function Landing() {
     const [hours, setHours] = useState<OpeningHours | null>(null);
     const [menuOpen, setMenuOpen] = useState(false);
     const [today, setToday] = useState(-1);
+    const [anim, setAnim] = useState(false);
 
     useEffect(() => {
         barberApi.services().then(setServices).catch(() => setServices([]));
@@ -144,29 +145,6 @@ export function Landing() {
                 // Marquee: infinite ticker (content duplicated in the DOM).
                 gsap.to(".marquee-track", { xPercent: -50, duration: 32, ease: "none", repeat: -1 });
 
-                // Generic reveals.
-                gsap.utils.toArray<HTMLElement>(".reveal").forEach((el) => {
-                    gsap.from(el, { y: 50, opacity: 0, duration: 1, ease: "power3.out", scrollTrigger: { trigger: el, start: "top 88%" } });
-                });
-                gsap.utils.toArray<HTMLElement>(".reveal-line").forEach((el) => {
-                    gsap.from(el.querySelectorAll(".rl"), {
-                        yPercent: 110,
-                        duration: 1,
-                        stagger: 0.1,
-                        ease: "power4.out",
-                        scrollTrigger: { trigger: el, start: "top 88%" },
-                    });
-                });
-                gsap.utils.toArray<HTMLElement>(".draw-rule").forEach((el) => {
-                    gsap.from(el, {
-                        scaleX: 0,
-                        transformOrigin: "left center",
-                        duration: 1.2,
-                        ease: "power3.inOut",
-                        scrollTrigger: { trigger: el, start: "top 92%" },
-                    });
-                });
-
                 // Experience: each image is revealed (clip-path) when its text is reached.
                 const imgs = gsap.utils.toArray<HTMLElement>(".exp-img");
                 gsap.set(imgs.slice(1), { clipPath: "inset(100% 0% 0% 0%)" });
@@ -181,7 +159,6 @@ export function Landing() {
                     );
                 gsap.utils.toArray<HTMLElement>(".exp-text").forEach((el, i) => {
                     ScrollTrigger.create({ trigger: el, start: "top 65%", end: "bottom 35%", onEnter: () => show(i), onEnterBack: () => show(i) });
-                    gsap.from(el, { opacity: 0.2, ease: "none", scrollTrigger: { trigger: el, start: "top 80%", end: "top 50%", scrub: true } });
                 });
                 gsap.to(".exp-img img", {
                     scale: 1.08,
@@ -189,22 +166,6 @@ export function Landing() {
                     scrollTrigger: { trigger: ".experience", start: "top bottom", end: "bottom top", scrub: true },
                 });
 
-                // Steps: brass rings draw in, cards rise.
-                gsap.from(".step-ring circle", {
-                    strokeDashoffset: 189,
-                    duration: 1.4,
-                    stagger: 0.25,
-                    ease: "power3.out",
-                    scrollTrigger: { trigger: ".steps", start: "top 78%" },
-                });
-                gsap.from(".step", {
-                    y: 40,
-                    opacity: 0,
-                    duration: 0.9,
-                    stagger: 0.2,
-                    ease: "power3.out",
-                    scrollTrigger: { trigger: ".steps", start: "top 78%" },
-                });
                 gsap.to(".domicile-bg", {
                     yPercent: 12,
                     ease: "none",
@@ -241,46 +202,39 @@ export function Landing() {
         return () => ctx.revert();
     }, []);
 
-    // Data-driven reveals, once the API answered (page height changes too).
-    useLayoutEffect(() => {
-        if (!services && !hours && !profile) return;
-        const ctx = gsap.context(() => {
-            const mm = gsap.matchMedia();
-            mm.add("(prefers-reduced-motion: no-preference)", () => {
-                if (services?.length) {
-                    gsap.from(".menu-row", {
-                        y: 30,
-                        opacity: 0,
-                        duration: 0.8,
-                        stagger: 0.12,
-                        ease: "power3.out",
-                        scrollTrigger: { trigger: ".menu-list", start: "top 85%" },
-                    });
-                }
-                if (hours) {
-                    gsap.from(".hours-row", {
-                        x: -20,
-                        opacity: 0,
-                        duration: 0.6,
-                        stagger: 0.06,
-                        ease: "power2.out",
-                        scrollTrigger: { trigger: ".hours-list", start: "top 85%" },
-                    });
-                }
-                if (profile?.communes.length) {
-                    gsap.from(".zone", {
-                        y: 24,
-                        opacity: 0,
-                        duration: 0.6,
-                        stagger: 0.04,
-                        ease: "power2.out",
-                        scrollTrigger: { trigger: ".zones-list", start: "top 88%" },
-                    });
-                }
-            });
-            ScrollTrigger.refresh();
-        }, root);
-        return () => ctx.revert();
+    // Scroll reveals: IntersectionObserver (robust to pinned sections and to
+    // content arriving late from the API). Elements are only hidden while
+    // .bl-anim is on the root, i.e. when motion is allowed.
+    useEffect(() => {
+        const el = root.current;
+        if (!el) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        setAnim(true);
+        const io = new IntersectionObserver(
+            (entries) =>
+                entries.forEach((e) => {
+                    if (e.isIntersecting) {
+                        e.target.classList.add("is-in");
+                        io.unobserve(e.target);
+                    }
+                }),
+            { rootMargin: "0px 0px -8% 0px", threshold: 0.05 },
+        );
+        el.querySelectorAll(".rv, .rv-line, .rv-rule, .steps").forEach((n) => {
+            if (!n.classList.contains("is-in")) io.observe(n);
+        });
+        // Late content changes the page height: keep ScrollTrigger in sync.
+        const refresh = () => ScrollTrigger.refresh();
+        const imgs = Array.from(el.querySelectorAll("img"));
+        imgs.forEach((img) => {
+            if (!img.complete) img.addEventListener("load", refresh, { once: true });
+        });
+        const timer = window.setTimeout(refresh, 300);
+        return () => {
+            io.disconnect();
+            window.clearTimeout(timer);
+            imgs.forEach((img) => img.removeEventListener("load", refresh));
+        };
     }, [services, hours, profile]);
 
     const breaksFor = (weekday: number) => hours?.breaks.filter((b) => b.weekday === weekday) ?? [];
@@ -288,7 +242,7 @@ export function Landing() {
     const brand = profile?.display_name ?? "Barber";
 
     return (
-        <div ref={root} className="bl min-h-screen font-sans">
+        <div ref={root} className={`bl min-h-screen font-sans ${anim ? "bl-anim" : ""}`}>
             {/* NAV */}
             <header className="bl-nav fixed inset-x-0 top-0 z-50 border-b border-transparent transition-colors duration-300">
                 <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-8">
@@ -416,40 +370,6 @@ export function Landing() {
                 </div>
             </div>
 
-            {/* EXPERIENCE */}
-            <section id="experience" className="experience relative bg-[#0b0b0c]">
-                <div className="mx-auto grid max-w-7xl gap-12 px-4 py-24 sm:px-8 lg:grid-cols-2 lg:gap-16 lg:py-0">
-                    <div className="lg:sticky lg:top-0 lg:flex lg:h-screen lg:items-center">
-                        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[2rem] sm:aspect-[16/11] lg:aspect-[4/5]">
-                            {EXPERIENCE.map((e, i) => (
-                                <div key={e.n} className="exp-img photo vignette absolute inset-0" style={{ zIndex: i }}>
-                                    <img src={e.img.src} alt={e.img.alt} width={e.img.w} height={e.img.h} loading="lazy" decoding="async" />
-                                </div>
-                            ))}
-                            <div className="absolute bottom-5 left-5 z-10 rounded-full bg-[#0b0b0c]/70 px-4 py-2 text-[11px] uppercase tracking-[0.25em] backdrop-blur">
-                                L’expérience {brand}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="lg:py-[28vh]">
-                        <p className="eyebrow-b reveal">L’expérience</p>
-                        <h2 className="reveal-line font-barber mt-5 text-5xl sm:text-7xl">
-                            <MaskedLines lines={["Un salon", "qui vient", "à vous."]} accentLast />
-                        </h2>
-                        <div className="mt-12 space-y-14 lg:mt-24 lg:space-y-[26vh]">
-                            {EXPERIENCE.map((e) => (
-                                <article key={e.n} className="exp-text max-w-md">
-                                    <p className="brass font-barber text-6xl">{e.n}</p>
-                                    <div className="draw-rule rule my-5 w-16" />
-                                    <h3 className="font-display text-2xl font-semibold">{e.title}</h3>
-                                    <p className="mt-3 text-lg text-cream-muted">{e.text}</p>
-                                </article>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             {/* PRESTATIONS — barbershop price menu */}
             <section id="prestations" className="relative isolate scroll-mt-16 overflow-hidden py-24 sm:py-32">
                 <div className="photo absolute inset-0 -z-20">
@@ -458,12 +378,12 @@ export function Landing() {
                 <div className="absolute inset-0 -z-10 bg-[#0b0b0c]/85" />
                 <div className="mx-auto max-w-4xl px-4 sm:px-8">
                     <div className="text-center">
-                        <p className="eyebrow-b reveal">La carte</p>
-                        <h2 className="reveal-line font-barber mt-5 text-5xl sm:text-7xl">
+                        <p className="eyebrow-b rv">La carte</p>
+                        <h2 className="rv-line font-barber mt-5 text-5xl sm:text-7xl">
                             <MaskedLines lines={["Prestations", "& tarifs"]} accentLast />
                         </h2>
                         {minPrice !== null && (
-                            <p className="reveal mt-5 text-cream-muted">
+                            <p className="rv mt-5 text-cream-muted">
                                 À partir de <span className="brass font-semibold">{formatPrice(minPrice)}</span>, le barbier se déplace chez vous.
                             </p>
                         )}
@@ -481,8 +401,8 @@ export function Landing() {
                             <p className="text-center text-cream-muted">La carte est en cours de mise à jour. Revenez très vite.</p>
                         )}
                         <ul className="menu-list divide-y divide-white/10">
-                            {services?.map((s) => (
-                                <li key={s.id} className="menu-row">
+                            {services?.map((s, i) => (
+                                <li key={s.id} className="menu-row rv" style={{ "--d": i } as React.CSSProperties}>
                                     <Link href={`/reserver?service=${s.id}`} className="group block py-6">
                                         <div className="flex items-baseline gap-3">
                                             <h3 className="font-barber min-w-0 text-2xl transition group-hover:text-[#c8a96a] sm:text-3xl">{s.name}</h3>
@@ -504,15 +424,49 @@ export function Landing() {
                 </div>
             </section>
 
+            {/* EXPERIENCE */}
+            <section id="experience" className="experience relative bg-[#0b0b0c]">
+                <div className="mx-auto grid max-w-7xl gap-12 px-4 py-24 sm:px-8 lg:grid-cols-2 lg:gap-16 lg:py-0">
+                    <div className="lg:sticky lg:top-0 lg:flex lg:h-screen lg:items-center">
+                        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[2rem] sm:aspect-[16/11] lg:aspect-[4/5]">
+                            {EXPERIENCE.map((e, i) => (
+                                <div key={e.n} className="exp-img photo vignette absolute inset-0" style={{ zIndex: i }}>
+                                    <img src={e.img.src} alt={e.img.alt} width={e.img.w} height={e.img.h} loading="lazy" decoding="async" />
+                                </div>
+                            ))}
+                            <div className="absolute bottom-5 left-5 z-10 rounded-full bg-[#0b0b0c]/70 px-4 py-2 text-[11px] uppercase tracking-[0.25em] backdrop-blur">
+                                L’expérience {brand}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="lg:py-[18vh]">
+                        <p className="eyebrow-b rv">L’expérience</p>
+                        <h2 className="rv-line font-barber mt-5 text-5xl sm:text-7xl">
+                            <MaskedLines lines={["Un salon", "qui vient", "à vous."]} accentLast />
+                        </h2>
+                        <div className="mt-12 space-y-14 lg:mt-20 lg:space-y-[20vh]">
+                            {EXPERIENCE.map((e) => (
+                                <article key={e.n} className="exp-text max-w-md">
+                                    <p className="brass font-barber text-6xl">{e.n}</p>
+                                    <div className="rv-rule rule my-5 w-16" />
+                                    <h3 className="font-display text-2xl font-semibold">{e.title}</h3>
+                                    <p className="mt-3 text-lg text-cream-muted">{e.text}</p>
+                                </article>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* GALERIE — pinned horizontal scroll on desktop, swipe on mobile */}
             <section id="galerie" className="gallery scroll-mt-16 overflow-hidden bg-[#f4efe7] text-[#0b0b0c] lg:flex lg:h-screen lg:flex-col lg:justify-center">
                 <div className="mx-auto w-full max-w-7xl px-4 pt-24 sm:px-8 lg:pt-0">
-                    <p className="eyebrow-b reveal !text-[#a8874a] before:!bg-[#a8874a]">Galerie</p>
+                    <p className="eyebrow-b rv !text-[#a8874a] before:!bg-[#a8874a]">Galerie</p>
                     <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-                        <h2 className="reveal-line font-barber text-5xl sm:text-7xl">
+                        <h2 className="rv-line font-barber text-5xl sm:text-7xl">
                             <MaskedLines lines={["Le savoir-faire"]} />
                         </h2>
-                        <p className="reveal max-w-sm text-[#0b0b0c]/60">Dégradés, contours, barbe : le geste du barbier, en images.</p>
+                        <p className="rv max-w-sm text-[#0b0b0c]/60">Dégradés, contours, barbe : le geste du barbier, en images.</p>
                     </div>
                 </div>
                 <div className="gallery-track mt-10 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-24 sm:gap-6 sm:px-8 lg:w-max lg:snap-none lg:overflow-visible lg:pb-0 lg:pl-[max(2rem,calc((100vw-80rem)/2+2rem))]">
@@ -543,16 +497,16 @@ export function Landing() {
                 </div>
                 <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#0b0b0c] via-[#0b0b0c]/80 to-[#0b0b0c]" />
                 <div className="mx-auto max-w-7xl px-4 sm:px-8">
-                    <p className="eyebrow-b reveal">À domicile</p>
-                    <h2 className="reveal-line font-barber mt-5 max-w-3xl text-5xl sm:text-7xl">
+                    <p className="eyebrow-b rv">À domicile</p>
+                    <h2 className="rv-line font-barber mt-5 max-w-3xl text-5xl sm:text-7xl">
                         <MaskedLines lines={["Trois étapes,", "zéro attente."]} accentLast />
                     </h2>
                     <ol className="steps mt-16 grid gap-12 md:grid-cols-3 md:gap-8">
-                        {STEPS.map((s) => (
-                            <li key={s.n} className="step">
+                        {STEPS.map((s, i) => (
+                            <li key={s.n} className="step rv" style={{ "--d": i * 2 } as React.CSSProperties}>
                                 <div className="relative h-16 w-16">
-                                    <svg viewBox="0 0 64 64" className="step-ring absolute inset-0 -rotate-90" aria-hidden="true">
-                                        <circle cx="32" cy="32" r="30" fill="none" stroke="#c8a96a" strokeWidth="1.5" strokeDasharray="189" strokeDashoffset="0" />
+                                    <svg viewBox="0 0 64 64" className="step-ring absolute inset-0 -rotate-90" style={{ "--d": i } as React.CSSProperties} aria-hidden="true">
+                                        <circle cx="32" cy="32" r="30" fill="none" stroke="#c8a96a" strokeWidth="1.5" strokeDasharray="189" />
                                     </svg>
                                     <span className="brass font-barber absolute inset-0 grid place-items-center text-3xl">{s.n}</span>
                                 </div>
@@ -562,12 +516,12 @@ export function Landing() {
                         ))}
                     </ol>
                     {profile && (
-                        <p className="reveal mt-14 max-w-xl text-sm text-cream-muted">
+                        <p className="rv mt-14 max-w-xl text-sm text-cream-muted">
                             Une demande non confirmée sous {Math.max(1, Math.round(profile.pending_expiry_minutes / 60))} h libère le créneau. Annulation
                             possible jusqu’à {profile.cancel_min_hours} h avant le rendez-vous.
                         </p>
                     )}
-                    <Link href="/reserver" className="reveal bl-btn bl-btn-brass mt-10">
+                    <Link href="/reserver" className="rv bl-btn bl-btn-brass mt-10">
                         Commencer ma réservation <IconArrow className="h-4 w-4" />
                     </Link>
                 </div>
@@ -577,11 +531,11 @@ export function Landing() {
             <section className="bg-[#0b0b0c]">
                 <div className="mx-auto grid max-w-7xl gap-16 px-4 py-24 sm:px-8 sm:py-32 lg:grid-cols-2">
                     <div id="horaires" className="scroll-mt-24">
-                        <p className="eyebrow-b reveal">Horaires</p>
-                        <h2 className="reveal-line font-barber mt-5 text-5xl sm:text-6xl">
+                        <p className="eyebrow-b rv">Horaires</p>
+                        <h2 className="rv-line font-barber mt-5 text-5xl sm:text-6xl">
                             <MaskedLines lines={["Quand on passe"]} />
                         </h2>
-                        <div className="draw-rule rule mt-8 w-full opacity-40" />
+                        <div className="rv-rule rule mt-8 w-full opacity-40" />
                         {!hours && <div className="mt-6 h-64 animate-pulse rounded-2xl bg-white/5" aria-busy="true" />}
                         {hours && (
                             <ul className="hours-list mt-2">
@@ -592,7 +546,8 @@ export function Landing() {
                                     return (
                                         <li
                                             key={name}
-                                            className={`hours-row flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-white/10 py-4 ${isToday ? "text-[#f4efe7]" : "text-cream-muted"}`}
+                                            style={{ "--d": wd } as React.CSSProperties}
+                                            className={`hours-row rv flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-white/10 py-4 ${isToday ? "text-[#f4efe7]" : "text-cream-muted"}`}
                                         >
                                             <span className="flex items-center gap-3 font-display text-lg font-semibold">
                                                 {name}
@@ -625,18 +580,19 @@ export function Landing() {
                     </div>
 
                     <div id="zones" className="scroll-mt-24">
-                        <p className="eyebrow-b reveal">Zones desservies</p>
-                        <h2 className="reveal-line font-barber mt-5 text-5xl sm:text-6xl">
+                        <p className="eyebrow-b rv">Zones desservies</p>
+                        <h2 className="rv-line font-barber mt-5 text-5xl sm:text-6xl">
                             <MaskedLines lines={["On se déplace", "à Abidjan"]} accentLast />
                         </h2>
-                        <p className="reveal mt-6 max-w-md text-cream-muted">
+                        <p className="rv mt-6 max-w-md text-cream-muted">
                             Le barbier vient à votre domicile, au bureau ou à l’hôtel, dans les communes suivantes :
                         </p>
                         <ul className="zones-list mt-8 flex flex-wrap gap-2.5">
-                            {(profile?.communes ?? []).map((c) => (
+                            {(profile?.communes ?? []).map((c, i) => (
                                 <li
                                     key={c}
-                                    className="zone inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm transition hover:border-[#c8a96a] hover:text-[#c8a96a]"
+                                    style={{ "--d": i } as React.CSSProperties}
+                                    className="zone rv inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm transition hover:border-[#c8a96a] hover:text-[#c8a96a]"
                                 >
                                     <IconPin className="h-4 w-4 opacity-60" /> {c}
                                 </li>
@@ -648,7 +604,7 @@ export function Landing() {
 
             {/* CONTACT */}
             <section id="contact" className="scroll-mt-20 bg-[#0b0b0c] px-4 pb-24 sm:px-8">
-                <div className="reveal mx-auto grid max-w-7xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#141416] lg:grid-cols-[1fr_1.1fr]">
+                <div className="rv mx-auto grid max-w-7xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#141416] lg:grid-cols-[1fr_1.1fr]">
                     <div className="photo vignette hidden min-h-[340px] lg:block">
                         <img src={IMG("barber-precision")} alt="Barbier concentré sur une coupe" width={1400} height={933} loading="lazy" decoding="async" />
                     </div>
@@ -691,11 +647,11 @@ export function Landing() {
                 </div>
                 <div className="absolute inset-0 -z-10 bg-[#0b0b0c]/75" />
                 <div className="mx-auto max-w-4xl px-4 text-center sm:px-8">
-                    <h2 className="reveal-line font-barber text-[13vw] sm:text-8xl">
+                    <h2 className="rv-line font-barber text-[13vw] sm:text-8xl">
                         <MaskedLines lines={["Réservez votre", "prochaine coupe"]} accentLast />
                     </h2>
-                    <p className="reveal mx-auto mt-6 max-w-md text-lg text-cream-muted">Choisissez votre créneau maintenant, le barbier s’occupe du reste.</p>
-                    <Link href="/reserver" className="reveal bl-btn bl-btn-brass mt-10">
+                    <p className="rv mx-auto mt-6 max-w-md text-lg text-cream-muted">Choisissez votre créneau maintenant, le barbier s’occupe du reste.</p>
+                    <Link href="/reserver" className="rv bl-btn bl-btn-brass mt-10">
                         Réserver un créneau <IconArrow className="h-4 w-4" />
                     </Link>
                 </div>

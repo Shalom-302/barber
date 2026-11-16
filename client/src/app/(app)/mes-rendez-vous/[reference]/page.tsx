@@ -29,7 +29,7 @@ function Timeline({ b }: { b: Booking }) {
                     <span
                         className={cn(
                             "relative z-10 mt-1 h-[15px] w-[15px] shrink-0 rounded-full border-[3px] border-white ring-1",
-                            i.tone === "done" ? "bg-black ring-black" : i.tone === "bad" ? "bg-red-500 ring-red-500" : "animate-pulse bg-amber-500 ring-amber-500"
+                            i.tone === "done" ? "bg-brass ring-brass" : i.tone === "bad" ? "bg-red-500 ring-red-500" : "animate-pulse bg-amber-500 ring-amber-500"
                         )}
                     />
                     <div>
@@ -74,7 +74,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ refere
     }
 
     const back = (
-        <Link href="/mes-rendez-vous" className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-kx-muted hover:text-black">
+        <Link href="/mes-rendez-vous" className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-kx-muted hover:text-brass-dark">
             <IconArrowLeft className="h-4 w-4" /> Mes rendez-vous
         </Link>
     );
@@ -87,8 +87,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ refere
             {back}
             <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="eyebrow">Réf. {b.reference}</p>
-                    <h1 className="mt-1 font-display text-2xl font-semibold md:text-3xl">{formatDateTime(b.start_at)}</h1>
+                    <p className="text-[11px] font-semibold tracking-[0.28em] text-brass-dark uppercase">Réf. {b.reference}</p>
+                    <h1 className="mt-1 font-barber text-3xl text-ink md:text-5xl">{formatDateTime(b.start_at)}</h1>
                 </div>
                 <StatusBadge status={b.status} className="px-3 py-1.5 text-sm" />
             </div>
@@ -98,7 +98,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ refere
                     <div className="card">
                         <div className="flex items-center justify-between gap-4 border-b border-kx-border pb-4">
                             <div className="flex min-w-0 items-center gap-3">
-                                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kx-panel2">
+                                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-ink text-brass">
                                     <IconScissors className="h-5 w-5" />
                                 </span>
                                 <div className="min-w-0">
@@ -108,12 +108,12 @@ export default function BookingDetailPage({ params }: { params: Promise<{ refere
                                     </p>
                                 </div>
                             </div>
-                            <p className="font-display text-xl font-semibold whitespace-nowrap">{formatPrice(b.price)}</p>
+                            <p className="font-barber text-3xl whitespace-nowrap text-brass-dark">{formatPrice(b.price)}</p>
                         </div>
                         <dl className="divide-y divide-kx-border">
                             <InfoRow label="Adresse">
                                 <span className="inline-flex items-start gap-1.5">
-                                    <IconPin className="mt-0.5 h-4 w-4 shrink-0 text-kx-muted" />
+                                    <IconPin className="mt-0.5 h-4 w-4 shrink-0 text-brass-dark" />
                                     <span>
                                         {b.commune}, {b.quartier}
                                         <br />
@@ -143,8 +143,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ refere
                 </div>
 
                 <div className="space-y-4">
-                    <div className="rounded-2xl bg-kx-navy p-5 text-white sm:p-6">
-                        <p className="font-display text-lg font-semibold">Contacter le barbier</p>
+                    <div className="rounded-2xl bg-ink p-5 text-cream sm:p-6">
+                        <p className="font-barber text-2xl">Contacter <span className="text-brass">le barbier</span></p>
                         {profile && (profile.whatsapp_url || profile.call_url) ? (
                             <>
                                 <p className="mt-1 mb-5 text-sm text-white/60">Une question sur ce rendez-vous ? Joignez directement {profile.display_name}.</p>

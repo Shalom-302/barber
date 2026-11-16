@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Path, Query, Request
 from sqlalchemy import case, delete, desc, func, select
+from sqlalchemy.orm import noload
 
 from backend.app.admin.schema.barber import (
     AdminBookingOut,
@@ -148,7 +149,12 @@ async def list_clients(
             func.max(Booking.start_at).label('last_at'),
         ).group_by(Booking.user_id).subquery()
     )
-    stmt = select(User, agg.c.total, agg.c.completed, agg.c.last_at).join(agg, agg.c.uid == User.id)
+    # noload: User.roles is lazy='joined', which would duplicate rows here.
+    stmt = (
+        select(User, agg.c.total, agg.c.completed, agg.c.last_at)
+        .join(agg, agg.c.uid == User.id)
+        .options(noload(User.roles))
+    )
     if q:
         like = f'%{q.strip()}%'
         stmt = stmt.where(User.pseudo.ilike(like) | User.phone.like(like))

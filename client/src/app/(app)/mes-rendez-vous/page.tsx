@@ -19,11 +19,11 @@ function BookingRow({ b }: { b: Booking }) {
     return (
         <Link
             href={`/mes-rendez-vous/${b.reference}`}
-            className={cn("group flex items-center gap-4 rounded-2xl border border-kx-border bg-white p-4 transition hover:border-black/30 hover:shadow-card sm:p-5", muted && "opacity-70")}
+            className={cn("group flex items-center gap-4 rounded-2xl border border-kx-border bg-white p-4 transition hover:border-brass/60 hover:shadow-card sm:p-5", muted && "opacity-70")}
         >
-            <div className={cn("grid w-16 shrink-0 place-items-center rounded-xl py-2.5 text-center", past || muted ? "bg-kx-panel2" : "bg-black text-white")}>
-                <span className="font-display text-2xl leading-none font-semibold">{dayNum.format(new Date(b.start_at))}</span>
-                <span className={cn("mt-1 text-[11px] uppercase", past || muted ? "text-kx-muted" : "text-white/70")}>{monthShort.format(new Date(b.start_at)).replace(".", "")}</span>
+            <div className={cn("grid w-[4.5rem] shrink-0 place-items-center rounded-xl py-3 text-center", past || muted ? "bg-kx-panel2 text-ink/60" : "bg-ink text-cream")}>
+                <span className={cn("font-barber text-3xl leading-none", !(past || muted) && "text-brass")}>{dayNum.format(new Date(b.start_at))}</span>
+                <span className={cn("mt-1 text-[11px] tracking-widest uppercase", past || muted ? "text-kx-muted" : "text-cream/70")}>{monthShort.format(new Date(b.start_at)).replace(".", "")}</span>
             </div>
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -34,10 +34,10 @@ function BookingRow({ b }: { b: Booking }) {
                     {weekday.format(new Date(b.start_at))} · {formatTime(b.start_at)}
                 </p>
                 <p className="truncate text-sm text-kx-muted">
-                    {b.commune}, {b.quartier} · {formatPrice(b.price)}
+                    {b.commune}, {b.quartier} · <span className="font-semibold text-brass-dark">{formatPrice(b.price)}</span>
                 </p>
             </div>
-            <IconChevron className="h-5 w-5 shrink-0 text-kx-muted transition group-hover:translate-x-0.5 group-hover:text-black" />
+            <IconChevron className="h-5 w-5 shrink-0 text-kx-muted transition group-hover:translate-x-0.5 group-hover:text-brass-dark" />
         </Link>
     );
 }
@@ -60,7 +60,7 @@ export default function MyBookingsPage() {
                 title="Mes rendez-vous"
                 sub="Suivez vos demandes et vos rendez-vous."
                 actions={
-                    <Link href="/reserver" className="btn">
+                    <Link href="/reserver" className="btn-brass">
                         <IconPlus className="h-4 w-4" /> Réserver
                     </Link>
                 }
@@ -68,19 +68,19 @@ export default function MyBookingsPage() {
             <ErrorBox message={error} />
             {!rows && !error && <Loading />}
             {rows?.length === 0 && (
-                <Empty title="Aucun rendez-vous pour l’instant" action={<Link href="/reserver" className="btn">Réserver ma première coupe</Link>}>
+                <Empty title="Aucun rendez-vous pour l’instant" action={<Link href="/reserver" className="btn-brass">Réserver ma première coupe</Link>}>
                     Choisissez une prestation et un créneau : le barbier vient chez vous.
                 </Empty>
             )}
             {upcoming.length > 0 && (
                 <section className="mb-8">
-                    <h2 className="mb-3 font-display text-lg font-semibold">À venir</h2>
+                    <h2 className="mb-3 text-[11px] font-semibold tracking-[0.28em] text-brass-dark uppercase">À venir</h2>
                     <div className="grid gap-3">{upcoming.map(b => <BookingRow key={b.id} b={b} />)}</div>
                 </section>
             )}
             {others.length > 0 && (
                 <section>
-                    <h2 className="mb-3 font-display text-lg font-semibold">Historique</h2>
+                    <h2 className="mb-3 text-[11px] font-semibold tracking-[0.28em] text-kx-muted uppercase">Historique</h2>
                     <div className="grid gap-3">{others.map(b => <BookingRow key={b.id} b={b} />)}</div>
                 </section>
             )}

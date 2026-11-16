@@ -31,9 +31,9 @@ export const siteConfig = {
     apiBasePath: "/admin/api/v1",
     nav: {
         user: [
-            { name: "Accueil", href: "/", icon: IconHome },
+            { name: "Accueil du site", href: "/", icon: IconHome },
             { name: "Réserver", href: "/reserver", icon: IconCalendar },
-            { name: "Rendez-vous", href: "/mes-rendez-vous", icon: IconCalendarCheck },
+            { name: "Mes rendez-vous", href: "/mes-rendez-vous", icon: IconCalendarCheck },
             { name: "Profil", href: "/profile", icon: IconUser },
         ] satisfies NavItem[],
         admin: [

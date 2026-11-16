@@ -113,9 +113,13 @@
 
 /* Photo treatments */
 .bl .photo {
-    position: relative;
     overflow: hidden;
     isolation: isolate;
+}
+/* Background photos are absolutely positioned (Tailwind `absolute`); only
+   in-flow photos become a positioning context. */
+.bl .photo:not(.absolute) {
+    position: relative;
 }
 .bl .photo img {
     width: 100%;
@@ -158,7 +162,47 @@
 .bl .mask {
     display: block;
     overflow: hidden;
+    /* Room for capital accents (É, Ê) above the 0.92 line-height. */
+    padding-top: 0.16em;
+    margin-top: -0.16em;
     padding-bottom: 0.06em;
+}
+
+/* Scroll reveals (IntersectionObserver adds .is-in). Only hidden when JS
+   animations are enabled (.bl-anim on the root), so content is never stuck. */
+.bl-anim .rv {
+    opacity: 0;
+    transform: translateY(36px);
+    transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--d, 0) * 70ms);
+}
+.bl-anim .rv.is-in {
+    opacity: 1;
+    transform: none;
+}
+.bl-anim .rv-line .rl {
+    transform: translateY(110%);
+    transition: transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--d, 0) * 90ms);
+}
+.bl-anim .rv-line.is-in .rl {
+    transform: none;
+}
+.bl-anim .rv-rule {
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 1.2s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.bl-anim .rv-rule.is-in {
+    transform: none;
+}
+.bl-anim .step-ring circle {
+    stroke-dashoffset: 189;
+    transition: stroke-dashoffset 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--d, 0) * 200ms);
+}
+.bl-anim .is-in .step-ring circle {
+    stroke-dashoffset: 0;
 }
 
 /* Horizontal gallery: native swipe on mobile */
