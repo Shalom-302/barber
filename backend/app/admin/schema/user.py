@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import ConfigDict, EmailStr, Field, HttpUrl, model_validator
+import re
+
+from pydantic import ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 from typing_extensions import Self
 
 from backend.common.enums import StatusType
@@ -41,10 +43,32 @@ class UpdateUserParam(SchemaBase):
     phone: str | None = None
 
 
+# 3-30 characters: letters (accents included), digits, . _ - or single inner
+# spaces; must start and end with a letter or digit. (Ported from Foody.)
+_PSEUDO_RE = re.compile(r"^[0-9A-Za-zÀ-ÖØ-öø-ÿ](?:[0-9A-Za-zÀ-ÖØ-öø-ÿ._\- ]{1,28})[0-9A-Za-zÀ-ÖØ-öø-ÿ]$")
+# A client must not pass for the business.
+_RESERVED = ('admin', 'barber', 'support', 'moderat')
+
+
+def normalize_pseudo(value: str) -> str:
+    pseudo = ' '.join(value.split())
+    if not _PSEUDO_RE.match(pseudo):
+        raise ValueError('Pseudo invalide : 3 à 30 caractères, lettres, chiffres, espaces, « . », « _ » ou « - ».')
+    if any(word in pseudo.lower() for word in _RESERVED):
+        raise ValueError('Ce pseudo est réservé, choisissez-en un autre.')
+    return pseudo
+
+
 class UpdateMeParam(SchemaBase):
     """Fields a user may change on its own profile."""
     firstname: str | None = Field(default=None, max_length=80)
     lastname: str | None = Field(default=None, max_length=80)
+    pseudo: str | None = Field(default=None, max_length=40)
+
+    @field_validator('pseudo')
+    @classmethod
+    def _pseudo(cls, v: str | None) -> str | None:
+        return normalize_pseudo(v) if v is not None else None
 
 
 class UserResetPassword(SchemaBase):

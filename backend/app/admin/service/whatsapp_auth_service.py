@@ -99,7 +99,8 @@ class WhatsappAuthService:
         await redis_client.delete(f'{settings.JWT_USER_REDIS_PREFIX}:{x_id}')
         background_tasks.add_task(_log_login, request, x_id, obj.phone, t.t('whatsapp.login_success'))
         _set_refresh_cookie(response, refresh_token.refresh_token, refresh_token.refresh_token_expire_time)
-        return {**data.model_dump(), 'is_new_user': is_new}
+        # No pseudo yet: the frontend asks for one before the first booking.
+        return {**data.model_dump(), 'is_new_user': is_new, 'needs_pseudo': not data.user.pseudo}
 
 
 whatsapp_auth_service: WhatsappAuthService = WhatsappAuthService()

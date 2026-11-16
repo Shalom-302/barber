@@ -225,14 +225,39 @@ class Settings(BaseSettings):
     GOWA_TIMEOUT: int = 20
     # Country code prepended to numbers typed in local form (leading 0).
     # Empty = numbers must be typed in international form (+33..., 00225...).
-    PHONE_DEFAULT_COUNTRY_CODE: str = ''
-    PHONE_KEEP_LEADING_ZERO: bool = False
+    # Côte d'Ivoire: local numbers are typed "07 xx xx xx xx" and keep their
+    # leading 0 after the 225 country code since the 2021 switch to 10 digits.
+    PHONE_DEFAULT_COUNTRY_CODE: str = '225'
+    PHONE_KEEP_LEADING_ZERO: bool = True
+    # Many WhatsApp accounts are still registered under the pre-2021 8-digit
+    # number (225 07 88 01 62 04 -> 225 88 01 62 04): try that form when GOWA
+    # cannot deliver to the 10-digit one (ported from Foody).
+    WHATSAPP_CI_LEGACY_FALLBACK: bool = True
+    # Optional: the GOWA *system* number. Only used to refuse saving it as the
+    # barber's personal contact number. Never shown to clients.
+    GOWA_SYSTEM_NUMBER: str = ''
     OTP_LENGTH: int = 6
     OTP_TTL_SECONDS: int = 600
     OTP_MAX_ATTEMPTS: int = 5
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
     OTP_MAX_SENDS_PER_PHONE_HOUR: int = 5
     OTP_REDIS_PREFIX: str = 'barber:otp'
+
+    # ------------------------------------------------------------------ #
+    # Booking (defaults; the barber edits the live values in /admin/reglages)
+    # ------------------------------------------------------------------ #
+    BOOKING_SLOT_STEP_MINUTES: int = 30
+    BOOKING_TRAVEL_BUFFER_MINUTES: int = 30
+    BOOKING_PENDING_EXPIRY_MINUTES: int = 120
+    BOOKING_CANCEL_MIN_HOURS: int = 3
+    BOOKING_MIN_LEAD_MINUTES: int = 120
+    BOOKING_HORIZON_DAYS: int = 30
+    # Background workers (notification outbox + pending expiry)
+    WORKERS_ENABLED: bool = True
+    WORKER_INTERVAL_SECONDS: int = 20
+    NOTIFY_MAX_ATTEMPTS: int = 5
+    NOTIFY_SEND_GAP_SECONDS: float = 1.0  # never burst: GOWA numbers get banned for spam
+    SITE_URL: str = 'http://localhost:3000'  # links in WhatsApp messages
 
     @model_validator(mode='after')
     def _enforce_production_safety(self) -> 'Settings':

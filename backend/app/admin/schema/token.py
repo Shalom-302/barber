@@ -19,6 +19,7 @@ class ConnectedUserInfo(SchemaBase):
     firstname: str | None = None
     lastname: str | None = None
     phone: str | None = None
+    pseudo: str | None = None
     email: str | None = None
     roles: list[GetRoleDetails] | None = None
     country_code: str | None = None

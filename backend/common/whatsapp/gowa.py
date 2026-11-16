@@ -38,7 +38,31 @@ def mask_phone(phone: str) -> str:
     return phone[:4] + '***' + phone[-2:] if len(phone) > 6 else '***'
 
 
+def _candidates(phone: str) -> list[str]:
+    """Numbers to try, most likely first.
+
+    Côte d'Ivoire moved to 10-digit numbers in 2021 (01/05/07 prefix in front
+    of the old 8 digits) but many WhatsApp accounts still live under the old
+    number: 225 07 88 01 62 04 is reachable as 225 88 01 62 04.
+    """
+    if settings.WHATSAPP_CI_LEGACY_FALLBACK and phone.startswith('2250') and len(phone) == 13:
+        return [phone, '225' + phone[5:]]
+    return [phone]
+
+
 async def send_whatsapp_text(phone: str, message: str) -> None:
+    """Send to the first candidate number WhatsApp accepts."""
+    candidates = _candidates(phone)
+    for i, candidate in enumerate(candidates):
+        try:
+            await _send_one(candidate, message)
+            return
+        except WhatsappUnreachable:
+            if i == len(candidates) - 1:
+                raise
+
+
+async def _send_one(phone: str, message: str) -> None:
     """Send *message* to a normalized phone number.
 
     :raises WhatsappUnreachable: the number cannot receive WhatsApp messages.

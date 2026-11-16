@@ -23,10 +23,13 @@ RUN apt-get update \
 
 # Optional extras (e.g. "--extra monitoring"); empty for the lean default.
 ARG EXTRAS=""
+# "--no-dev" for runtime images; "" also installs the dev group (pytest) for
+# the test image (docker-compose.test.yml).
+ARG DEV_DEPS="--no-dev"
 
 # Install dependencies first (cached layer; only re-runs when deps change)
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project ${EXTRAS}
+RUN uv sync --frozen ${DEV_DEPS} --no-install-project ${EXTRAS}
 
 # ============================================================================
 # Stage 2 — runtime: slim image with only what's needed to run

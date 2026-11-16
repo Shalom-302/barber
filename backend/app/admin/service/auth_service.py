@@ -220,6 +220,10 @@ class AuthService:
         changes = {k: v.strip() for k, v in obj.model_dump(exclude_unset=True).items() if isinstance(v, str)}
         if changes:
             async with async_db_session.begin() as db:
+                if 'pseudo' in changes:
+                    taken = await user_dao.get_by_pseudo_ci(db, changes['pseudo'])
+                    if taken and taken.id != request.user.id:
+                        raise errors.ForbiddenError(msg='Ce pseudo est déjà pris, choisissez-en un autre.')
                 await user_dao.update_model(db, request.user.id, changes)
         await redis_client.delete(f'{settings.JWT_USER_REDIS_PREFIX}:{request.user.x_id}')
 

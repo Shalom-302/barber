@@ -140,3 +140,16 @@ class Waiting_queue_filter_type(Enum):
 class Reason_type(Enum):
     COMPANY = "company"
     USER = "user"
+
+class BookingStatus(Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"
+
+
+class NotificationStatus(Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"

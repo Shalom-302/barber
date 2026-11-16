@@ -1,5 +1,5 @@
 from fast_captcha import text_captcha
-from sqlalchemy import and_, desc, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -55,6 +55,11 @@ class CRUDUser(CRUDBase[User]):
         :return:
         """
         return await self.select_model_by_column(db, phone=phone, populates=['roles'])
+
+    async def get_by_pseudo_ci(self, db: AsyncSession, pseudo: str) -> User | None:
+        """Case-insensitive pseudo lookup (pseudos are unique ignoring case)."""
+        stmt = select(self.model).where(func.lower(self.model.pseudo) == pseudo.lower())
+        return (await db.execute(stmt)).scalars().first()
 
     async def get_by_pseudo(self, db: AsyncSession, pseudo: str) -> User | None:
         """

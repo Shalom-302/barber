@@ -1,0 +1,34 @@
+# Test runner: builds the API image with the dev group (pytest) and runs the
+# suite against a throwaway `barber_test` database on the dev Postgres/Redis.
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DEV_DEPS: ""
+    image: barber-tests:latest
+    entrypoint: ["python", "-m", "pytest", "-q"]
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=dev
+      - POSTGRES_HOST=barber_postgres
+      - POSTGRES_DATABASE=barber_test
+      - REDIS_HOST=barber_redis
+      - REDIS_DATABASE=15
+      - MINIO_ENDPOINT=barber_minio:9000
+      - GOWA_URL=
+      - WORKERS_ENABLED=false
+      - NOTIFY_SEND_GAP_SECONDS=0
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - barber

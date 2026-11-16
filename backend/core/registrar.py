@@ -43,8 +43,13 @@ async def register_init(app: FastAPI):
         http_callback=http_limit_callback,
     )
 
+    # Booking expiry + WhatsApp notification outbox
+    from backend.app.admin.service import workers
+    workers.start()
+
     yield
 
+    await workers.stop()
     # Closing a redis connection
     await redis_client.close()
     # Close limiter
