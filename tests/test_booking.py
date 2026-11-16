@@ -334,3 +334,22 @@ async def test_notification_gives_up_after_max_attempts(http, monkeypatch):
         assert n.status == 'failed'
     r = await http.post(f'/barber-admin/notifications/{n.id}/retry', headers=admin['headers'])
     assert r.json()['data']['status'] == 'pending'
+
+
+async def test_public_hours(http):
+    r = await http.get('/barber/hours')
+    data = r.json()['data']
+    assert len(data['days']) == 7
+    assert data['days'][6]['is_open'] is False  # Sunday closed by default
+    assert any(b['label'] == 'Pause déjeuner' for b in data['breaks'])
+
+
+async def test_settings_reject_mojibake(http):
+    admin = await make_admin(http)
+    current = (await http.get('/barber-admin/settings', headers=admin['headers'])).json()['data']
+    r = await http.put('/barber-admin/settings', headers=admin['headers'],
+                       json={**current, 'communes': ['AdjamÃ©']})
+    assert r.status_code == 422
+    r = await http.put('/barber-admin/settings', headers=admin['headers'],
+                       json={**current, 'communes': ['Adjamé', 'Port-Bouët']})
+    assert r.status_code == 200 and r.json()['data']['communes'] == ['Adjamé', 'Port-Bouët']

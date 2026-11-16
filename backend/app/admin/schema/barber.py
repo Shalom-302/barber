@@ -62,6 +62,9 @@ class SettingsParam(SchemaBase):
         out: list[str] = []
         for c in v:
             c = ' '.join(c.split())[:60]
+            if 'Ã' in c or 'Â' in c:
+                # UTF-8 text decoded as Latin-1/cp1252 somewhere upstream.
+                raise ValueError(f'Encodage invalide pour « {c} » : renvoyez le texte en UTF-8.')
             if c and c not in out:
                 out.append(c)
         return out

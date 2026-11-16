@@ -9,6 +9,9 @@ from sqlalchemy import desc, select
 from backend.app.admin.schema.barber import (
     AvailabilityOut,
     BookingOut,
+    BreakOut,
+    ScheduleOut,
+    WorkingDayOut,
     CreateBookingParam,
     PublicProfileOut,
     ReasonParam,
@@ -22,7 +25,7 @@ from backend.common.exception import errors
 from backend.common.response.response_schema import ResponseModel, response_base
 from backend.common.security.jwt import DependsJwtAuth
 from backend.database.db_postgres import CurrentSession, async_db_session
-from backend.models.barber import Booking, Service
+from backend.models.barber import Booking, BreakPeriod, Service, WorkingDay
 from backend.utils.contact import call_url, whatsapp_url
 
 router = APIRouter(prefix='/barber', tags=['Barber - client'])
@@ -55,6 +58,16 @@ async def public_profile(request: Request, db: CurrentSession) -> ResponseModel:
         cancel_min_hours=cfg.cancel_min_hours,
         pending_expiry_minutes=cfg.pending_expiry_minutes,
         horizon_days=cfg.horizon_days,
+    )
+    return response_base.success(request=request, data=data)
+
+
+@router.get('/hours', summary='Weekly opening hours and breaks (public)')
+async def opening_hours(request: Request, db: CurrentSession) -> ResponseModel:
+    days = (await db.execute(select(WorkingDay).order_by(WorkingDay.weekday))).scalars().all()
+    breaks = (await db.execute(select(BreakPeriod).order_by(BreakPeriod.weekday, BreakPeriod.start_time))).scalars().all()
+    data = ScheduleOut(
+        days=[WorkingDayOut.model_validate(d) for d in days], breaks=[BreakOut.model_validate(b) for b in breaks]
     )
     return response_base.success(request=request, data=data)
 
