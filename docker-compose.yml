@@ -44,22 +44,6 @@ services:
     networks:
       - barber
 
-  # WhatsApp gateway (GOWA, go-whatsapp-web-multidevice) - opt-in.
-  # Enable it with COMPOSE_PROFILES=whatsapp and GOWA_URL=http://barber_gowa:3000
-  # in .env, then pair the *system* WhatsApp number by scanning the QR code at
-  # http://localhost:3002 (login: GOWA_BASIC_USER / GOWA_BASIC_PASS).
-  # Without it (dev), the OTP code is printed in the api logs.
-  gowa:
-    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
-    container_name: barber_gowa
-    profiles: ["whatsapp"]
-    restart: unless-stopped
-    command: ["rest", "--port=3000", "--basic-auth=${GOWA_BASIC_USER:-admin}:${GOWA_BASIC_PASS:-change-me}"]
-    volumes:
-      - barber_gowa:/app/storages
-    networks:
-      - barber
-
   postgres:
     image: postgres:16-alpine
     container_name: barber_postgres
@@ -114,7 +98,6 @@ volumes:
   barber_postgres:
   barber_redis:
   barber_minio:
-  barber_gowa:
 
 networks:
   barber:

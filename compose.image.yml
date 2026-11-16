@@ -9,20 +9,21 @@
 # "Environment" panel, together with the secrets below. In prod the API REFUSES
 # to boot with development defaults, so TOKEN_SECRET_KEY,
 # OPERA_LOG_ENCRYPT_SECRET_KEY, POSTGRES_PASSWORD, MINIO_SECRET_KEY,
-# PUBLIC_DOMAIN and the GOWA credentials are mandatory.
+# PUBLIC_DOMAIN and the GOWA credentials (same as Foody's) are mandatory.
 # Generate them locally with:  kfullstack ops secrets
 #
 # Private GHCR packages: add a registry in Dokploy (ghcr.io, your GitHub user,
 # a token with read:packages) or make the packages public.
 #
 # Routing: point the public domain at service `web`, port 3000. The API, MinIO
-# and GOWA have no public route; the browser calls the web origin, which
+# have no public route; the browser calls the web origin, which
 # proxies /admin/api/v1 to the API over the internal network.
 #
-# WhatsApp: the `gowa` service is this project's own WhatsApp gateway. Pair the
-# *system* number once: temporarily add a Dokploy domain on service `gowa`
-# (port 3000, protected by GOWA_BASIC_USER / GOWA_BASIC_PASS), scan the QR
-# code, then remove the domain. User numbers are only recipients.
+# WhatsApp: BARBER uses the EXISTING GOWA instance (the one Foody uses, paired
+# with the dedicated Moov number) on the external Docker network
+# `whatsapp-shared-network`. No GOWA instance is created here. That number only
+# sends OTPs and automatic notifications; clients contact the barber on his
+# PERSONAL numbers set in /admin/reglages.
 #
 # First admin, once the stack is up:
 #   docker exec -w /app <api-container> python -m backend.cli create-admin --phone +33612345678
@@ -56,14 +57,20 @@ services:
       # Refresh cookie: first-party on the web origin, HTTPS only.
       - COOKIE_SECURE=true
       - COOKIE_SAMESITE=lax
-      # WhatsApp OTP login through this project's own GOWA instance.
+      # WhatsApp OTP + notifications through the shared GOWA instance (Foody's).
       - WHATSAPP_AUTH_ENABLED=${WHATSAPP_AUTH_ENABLED:-true}
       - BRAND_NAME=${BRAND_NAME:-Barber}
-      - GOWA_URL=${GOWA_URL:-http://barber-gowa:3000}
-      - GOWA_BASIC_USER=${GOWA_BASIC_USER:-admin}
+      - GOWA_URL=${GOWA_URL:-http://shalom-gowa:3080}
+      - GOWA_BASIC_USER=${GOWA_BASIC_USER:?GOWA_BASIC_USER missing in Dokploy Environment}
       - GOWA_BASIC_PASS=${GOWA_BASIC_PASS:?GOWA_BASIC_PASS missing in Dokploy Environment}
-      - PHONE_DEFAULT_COUNTRY_CODE=${PHONE_DEFAULT_COUNTRY_CODE:-}
-      - PHONE_KEEP_LEADING_ZERO=${PHONE_KEEP_LEADING_ZERO:-false}
+      # Optional: the GOWA system number, only to refuse it as the barber's contact.
+      - GOWA_SYSTEM_NUMBER=${GOWA_SYSTEM_NUMBER:-}
+      - PHONE_DEFAULT_COUNTRY_CODE=225
+      - PHONE_KEEP_LEADING_ZERO=true
+      - WHATSAPP_CI_LEGACY_FALLBACK=true
+      # Links in WhatsApp messages
+      - SITE_URL=https://${PUBLIC_DOMAIN}
+      - BOOKING_PENDING_EXPIRY_MINUTES=${BOOKING_PENDING_EXPIRY_MINUTES:-120}
     expose:
       - "8000"
     depends_on:
@@ -78,6 +85,8 @@ services:
     networks:
       barber:
         aliases: [barber-api]
+      # Shared WhatsApp gateway network (GOWA `shalom-gowa`).
+      whatsapp-shared-network: {}
 
   web:
     image: ${BARBER_IMAGE:-ghcr.io/owner/barber}-web:${IMAGE_TAG:-latest}
@@ -90,18 +99,6 @@ services:
     depends_on:
       - api
     networks: [barber]
-
-  gowa:
-    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
-    restart: unless-stopped
-    command: ["rest", "--port=3000", "--basic-auth=${GOWA_BASIC_USER:-admin}:${GOWA_BASIC_PASS:?GOWA_BASIC_PASS missing in Dokploy Environment}"]
-    volumes:
-      - gowadata:/app/storages  # WhatsApp session: keep it, or re-pair
-    expose:
-      - "3000"
-    networks:
-      barber:
-        aliases: [barber-gowa]
 
   postgres:
     image: postgres:16-alpine
@@ -148,7 +145,10 @@ volumes:
   pgdata:
   redisdata:
   miniodata:
-  gowadata:
 
 networks:
   barber:
+  # Already created on the VPS (used by Foody):
+  #   docker network create whatsapp-shared-network
+  whatsapp-shared-network:
+    external: true

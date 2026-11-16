@@ -1,161 +1,160 @@
 # Barber
 
-A fullstack app generated with [kfullstack](https://github.com/Shalom-302/kfullstack):
+Plateforme de réservation de prestations de coiffure à domicile (Abidjan).
+Généré avec [kfullstack](https://github.com/Shalom-302/kfullstack) (architecture
+SHAAPI), authentification WhatsApp reprise de Foody. Référence générique de la
+base (commandes, contrat d'API, structure) : [docs/kfullstack.md](docs/kfullstack.md).
 
-- **backend/**: FastAPI (async SQLAlchemy + Alembic, Postgres, Redis, MinIO),
-  JWT auth, Casbin RBAC, login/operation logs, i18n (fr/en), Swagger.
-- **client/**: Next.js 15 + React 19 + Tailwind 4 frontend with a public
-  landing page, a **user space** and an **admin space**.
-- **WhatsApp OTP login** (passwordless) through your own
-  [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice) instance,
-  plus classic email + password.
+- **Client** : connexion par numéro WhatsApp + code (OTP) + pseudo, choix de la
+  prestation, de la date et du créneau, adresse (commune, quartier, adresse,
+  repère), suivi du statut, annulation, contact direct du barbier.
+- **Barbier (admin)** : demandes, acceptation / refus / annulation / fin,
+  clients et adresses, horaires, pauses, dates bloquées, prestations et tarifs,
+  numéros personnels, notifications WhatsApp.
 
-The `kfullstack` command is your day-to-day runner: it wraps `docker compose`, so
-the same commands work on Windows, macOS and Linux.
-
-## Quick start
+## Démarrage (dev)
 
 ```bash
-kfullstack up                                  # build + start api, web, postgres, redis, minio
-kfullstack db apply                            # apply database migrations
-kfullstack auth init --phone +33612345678      # first admin (WhatsApp)  - or --email/--password
+kfullstack up                                   # api, web, postgres, redis, minio
+kfullstack auth init --phone "07 XX XX XX XX"   # le barbier devient administrateur
 ```
-
-Then open:
 
 | | URL |
 | --- | --- |
-| Web app | http://localhost:3000 (admin space: `/admin`) |
-| API | http://localhost:8000 |
-| Swagger | http://localhost:8000/admin/api/v1/docs |
+| Application | http://localhost:3000 (dashboard : `/admin`) |
+| API / Swagger | http://localhost:8000/admin/api/v1/docs |
 
-In dev, WhatsApp codes are **not sent**: they are printed in the API logs
-(`kfullstack logs api`, look for `[dev] GOWA_URL unset`).
+En dev, aucun message WhatsApp n'est envoyé : les codes OTP et les
+notifications s'affichent dans `kfullstack logs api` (ligne `[dev] GOWA_URL unset`).
+Si le port 5432 est déjà pris sur la machine, changez `POSTGRES_HOST_PORT` dans `.env`.
 
-### Frontend with hot reload
+## Les deux numéros WhatsApp (règle absolue)
 
-`kfullstack up` runs the production build of the frontend. To work on it:
-
-```bash
-cd client
-cp .env.example .env.local   # API_INTERNAL_URL=http://localhost:8000
-yarn install
-yarn dev                     # http://localhost:3000 (stop the `web` container first)
-```
-
-## Architecture
-
-```
-browser ──► web (Next.js :3000) ──/admin/api/v1/*──► api (FastAPI :8000) ──► postgres / redis / minio
-                                                            └──► gowa (WhatsApp gateway) ──► WhatsApp
-```
-
-The browser only talks to the web origin. The Next.js route handler
-`client/src/app/admin/api/v1/[...path]` proxies API calls to `API_INTERNAL_URL`
-(read at runtime), so the refresh-token cookie stays first-party and **the same
-web image works for any domain**.
-
-### API contract
-
-All routes live under `/admin/api/v1` and answer `{code, msg, data}`.
-
-| Route | Access |
-| --- | --- |
-| `POST /auth/whatsapp/request-otp` `{phone}` | public, rate-limited |
-| `POST /auth/whatsapp/verify-otp` `{phone, code}` | public, creates the account on first login |
-| `POST /auth/register`, `POST /auth/login` `{email, password}` | public, rate-limited |
-| `POST /auth/token/new` (refresh cookie + old bearer) | authenticated |
-| `GET/PATCH /auth/me`, `POST /auth/logout` | authenticated |
-| `/user`, `/role`, `/casbin`, `/login_log`, `/opera_log` | **admin** |
-
-Roles: every new account gets the `user` role. An administrator is an account
-with an active `admin` role; protect your own routes with
-`dependencies=[DependsAdmin]` (`backend/common/security/permissions.py`) or with
-fine-grained Casbin policies (`DependsRBAC`). `401` always means "token
-missing/expired" (the client refreshes), `403` means "not allowed".
-
-## WhatsApp login (GOWA)
-
-1. **System number**: the WhatsApp account paired with *this project's* GOWA
-   instance. It only sends codes. User numbers are only recipients and login
-   identifiers. Never share a GOWA instance or its credentials across projects.
-2. Enable the bundled gateway in `.env`:
-   ```env
-   COMPOSE_PROFILES=whatsapp
-   GOWA_URL=http://barber_gowa:3000
-   GOWA_BASIC_USER=admin
-   GOWA_BASIC_PASS=<strong password>
-   ```
-3. `kfullstack up`, open http://localhost:3002, log in with the basic-auth
-   credentials and scan the QR code with the system phone.
-
-| Variable | Default | Purpose |
+| | Numéro système GOWA | Numéro personnel du barbier |
 | --- | --- | --- |
-| `WHATSAPP_AUTH_ENABLED` | `true` | Turn the OTP routes on/off |
-| `BRAND_NAME` | `Barber` | Name in the WhatsApp message |
-| `GOWA_URL` / `GOWA_BASIC_USER` / `GOWA_BASIC_PASS` | | GOWA instance |
-| `PHONE_DEFAULT_COUNTRY_CODE` | empty | Added to local numbers (`06...`); empty = international form required |
-| `PHONE_KEEP_LEADING_ZERO` | `false` | Keep the `0` after the country code (e.g. Côte d'Ivoire) |
-| `OTP_LENGTH`, `OTP_TTL_SECONDS` | `6`, `600` | Code format and lifetime |
-| `OTP_MAX_ATTEMPTS` | `5` | Wrong tries before the code is burned |
-| `OTP_RESEND_COOLDOWN_SECONDS` | `60` | Delay between two sends |
-| `OTP_MAX_SENDS_PER_PHONE_HOUR` | `5` | Hourly cap per number |
+| Rôle | OTP, confirmations, notifications automatiques | Contact direct, appels, échanges |
+| Configuration | Instance GOWA existante (celle de Foody, numéro Moov dédié) via `GOWA_URL` | `/admin/reglages` (`whatsapp_number`, `call_number`) |
+| Côté client | Jamais présenté comme le barbier ; chaque message rappelle « ne répondez pas à ce numéro » | Boutons `https://wa.me/…` et `tel:+…` |
 
-Security: codes are stored as an HMAC (never in clear), single-use, compared in
-constant time, attempts counted atomically; routes are rate-limited per IP; the
-request route answers the same way whether or not the number has an account.
-Outside dev the API refuses to boot without `GOWA_URL` and a real
-`GOWA_BASIC_PASS` (set `WHATSAPP_AUTH_ENABLED=false` to run without WhatsApp).
+Le backend ne connaît que l'URL de GOWA. `GOWA_SYSTEM_NUMBER` (optionnel)
+empêche d'enregistrer ce numéro comme contact personnel du barbier.
 
-## Deploy: GitHub → GHCR → Dokploy
+**Numérotation** : la numérotation ivoirienne à 10 chiffres est acceptée sous
+toutes ses formes (`07 01 02 03 04`, `+225 07…`, `00225…`, `225 07…`) et
+stockée `2250701020304`. À l'envoi, si WhatsApp ne connaît pas le numéro à
+10 chiffres, l'ancien format à 8 chiffres est essayé
+(`WHATSAPP_CI_LEGACY_FALLBACK`) sans changer l'identifiant du compte.
 
-1. Push the project to GitHub. `.github/workflows/build.yml` builds and pushes
-   two images on every push to `main` (and on `v*` tags):
-   `ghcr.io/<owner>/<repo>` (API) and `ghcr.io/<owner>/<repo>-web` (web).
-2. In Dokploy, create a **Compose** service from this repo using
-   **`compose.image.yml`**: it pulls the images instead of building on the VPS.
-3. In the Dokploy *Environment* panel set at least:
-   `BARBER_IMAGE=ghcr.io/<owner>/<repo>` (lowercase), `PUBLIC_DOMAIN`,
-   `TOKEN_SECRET_KEY`, `OPERA_LOG_ENCRYPT_SECRET_KEY`, `POSTGRES_PASSWORD`,
-   `MINIO_SECRET_KEY`, `GOWA_BASIC_PASS` (`kfullstack ops secrets` generates them).
-   Private packages: add a GHCR registry in Dokploy (token with `read:packages`).
-4. Point the domain at service **`web`**, port **3000**. API, MinIO and GOWA
-   stay internal.
-5. Pair the system WhatsApp number once (temporary domain on service `gowa`,
-   port 3000, protected by basic auth), then create the first admin:
-   `docker exec -w /app <api-container> python -m backend.cli create-admin --phone +33...`
+## Règles métier
 
-Self-hosting without Dokploy: `kfullstack ops harden` then `kfullstack up --prod`
-(see `kfullstack ops checklist`).
+- Statuts : `PENDING` → `CONFIRMED` → `COMPLETED`, ou `REJECTED` / `CANCELLED`.
+- **Double réservation impossible** : contrainte PostgreSQL d'exclusion
+  `ex_barber_booking_no_overlap` sur `tstzrange(start_at, blocked_until)` pour les
+  statuts `PENDING` et `CONFIRMED` (temps de trajet inclus). Deux demandes
+  simultanées sur le même créneau : une seule passe, l'autre reçoit une 409.
+- Une demande `PENDING` bloque le créneau jusqu'à son expiration
+  (`pending_expiry_minutes`, 2 h par défaut), puis passe `CANCELLED`
+  (par `system`) et le client est prévenu.
+- Le client peut annuler une demande en attente, ou un rendez-vous confirmé
+  jusqu'à `cancel_min_hours` (3 h) avant ; au-delà il contacte le barbier.
+- Créneaux = horaires du jour − pauses − dates bloquées − rendez-vous actifs
+  (+ trajet), par pas de `slot_step_minutes`, au plus tôt `min_lead_minutes`
+  (2 h) et jusqu'à `horizon_days` (30 j).
+- Tarifs et durées en base (`barber_service`), modifiables depuis le dashboard ;
+  chaque réservation garde une copie du prix au moment de la demande.
 
-## Commands
+Valeurs initiales : 2 prestations (machine du client 10 000 FCFA, machine du
+barbier 15 000 FCFA, 45 min), lundi–samedi 9 h–19 h, pause 13 h–14 h, dimanche
+fermé, communes d'Abidjan, trajet 30 min. Tout est modifiable dans `/admin`.
+
+## Notifications WhatsApp
+
+Écrites dans la table `barber_notification` **dans la même transaction** que le
+changement de statut (aucune perte possible), puis envoyées par une tâche de
+fond intégrée à l'API (toutes les `WORKER_INTERVAL_SECONDS`) : 1 message par
+seconde (anti-bannissement), nouvelles tentatives à délai croissant (30 s,
+1 min, 2 min…) jusqu'à `NOTIFY_MAX_ATTEMPTS` (5), puis `failed`. Le barbier
+voit les échecs dans `/admin/notifications` et peut relancer.
+
+| Événement | Destinataire |
+| --- | --- |
+| Demande reçue | client + barbier (sur son WhatsApp personnel) |
+| Confirmée / refusée / annulée par le barbier / terminée | client |
+| Annulée par le client | barbier |
+| Expirée | client |
+
+## API
+
+Routes sous `/admin/api/v1`, réponses `{code, msg, data}` ; `401` = jeton
+absent/expiré, `403` = non autorisé, `409` = créneau pris. Documentation
+interactive : `/admin/api/v1/docs` (désactivée en prod).
+
+| Route | Accès |
+| --- | --- |
+| `POST /auth/whatsapp/request-otp`, `POST /auth/whatsapp/verify-otp` | public |
+| `GET/PATCH /auth/me` (`pseudo`), `POST /auth/token/new`, `POST /auth/logout` | connecté |
+| `GET /barber/services`, `GET /barber/profile`, `GET /barber/availability?service_id=&date=` | public |
+| `POST /barber/bookings`, `GET /barber/bookings`, `GET /barber/bookings/{ref}`, `POST /barber/bookings/{ref}/cancel` | client |
+| `GET /barber-admin/overview`, `GET /barber-admin/bookings`, `POST /barber-admin/bookings/{id}/{confirm,reject,cancel,complete}` | admin |
+| `GET /barber-admin/clients` | admin |
+| `GET/POST/PUT/DELETE /barber-admin/services` | admin |
+| `GET/PUT /barber-admin/schedule`, `GET/POST/DELETE /barber-admin/blocked` | admin |
+| `GET/PUT /barber-admin/settings` | admin |
+| `GET /barber-admin/notifications`, `POST /barber-admin/notifications/{id}/retry` | admin |
+
+## Tests
 
 ```bash
-kfullstack up [--monitoring] [--prod]   # build + start
-kfullstack down [-v]                    # stop (-v: also wipe volumes)
-kfullstack logs [service]               # e.g. kfullstack logs api
-kfullstack restart [service] | ps | shell | redis
-kfullstack db generate -m "add posts" | apply | preview | pending | shell
-kfullstack auth init [--phone ... | --email ... --password ...]
-kfullstack storage init                 # ensure the MinIO bucket exists
-kfullstack ops harden | secrets [--write] | checklist
-kfullstack sec audit | auth URL | scan URL | ports [host]
-kfullstack add <plugin> | remove <plugin> | list-plugins
+docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
 ```
 
-## Project structure
+Base jetable `barber_test` (recréée et migrée par Alembic), Redis db 15, envois
+WhatsApp capturés. Couvre : OTP et numérotation ivoirienne, pseudo,
+disponibilités (horaires, pauses, dimanche, trajet, dates bloquées), création,
+**10 demandes simultanées sur un créneau → 1 seule acceptée**, contrainte SQL,
+expiration, confirmation / refus / fin, règles d'annulation, notifications et
+relances, liens WhatsApp / appel personnels, refus du numéro GOWA, autorisations.
+
+## Déploiement : GitHub → GHCR → Dokploy
+
+1. Chaque push sur `main` construit `ghcr.io/shalom-302/barber` (API) et
+   `ghcr.io/shalom-302/barber-web` (web) via `.github/workflows/build.yml`.
+2. Dans Dokploy : service **Compose** depuis ce dépôt, fichier
+   **`compose.image.yml`** (les images sont tirées, rien n'est construit sur le VPS).
+3. Variables (onglet *Environment*) :
+
+   | Variable | Valeur |
+   | --- | --- |
+   | `BARBER_IMAGE` | `ghcr.io/shalom-302/barber` |
+   | `PUBLIC_DOMAIN` | ex. `barber.exemple.ci` |
+   | `TOKEN_SECRET_KEY`, `OPERA_LOG_ENCRYPT_SECRET_KEY`, `POSTGRES_PASSWORD`, `MINIO_SECRET_KEY` | secrets forts (`kfullstack ops secrets`) |
+   | `GOWA_BASIC_USER`, `GOWA_BASIC_PASS` | identifiants de l'instance GOWA existante (ceux de Foody) |
+   | `GOWA_URL` | `http://shalom-gowa:3080` (par défaut) |
+   | `GOWA_SYSTEM_NUMBER` | optionnel (garde-fou) |
+
+   Paquets GHCR privés : ajouter le registre `ghcr.io` dans Dokploy (jeton `read:packages`).
+4. Domaine → service **`web`**, port **3000**. L'API rejoint le réseau externe
+   `whatsapp-shared-network` pour joindre `shalom-gowa` ; **aucune nouvelle
+   instance GOWA n'est créée**.
+5. Premier administrateur :
+   `docker exec -w /app <conteneur-api> python -m backend.cli create-admin --phone "07XXXXXXXX"`,
+   puis connexion WhatsApp sur le site et saisie des numéros personnels dans `/admin/reglages`.
+
+## Structure
 
 ```
-backend/                 FastAPI app (app/admin/{api,schema,service}, common/, core/conf.py, crud/, models/, alembic/)
-  common/whatsapp/       the single GOWA client
-  common/security/       jwt.py, permissions.py (DependsAdmin), rbac.py (Casbin)
-client/                  Next.js frontend (src/config/site.ts: name, navigation per role)
-compose.image.yml        production compose for Dokploy (pulls GHCR images)
-docker-compose*.yml      local stack (+ override for dev, + monitoring)
-.github/workflows/       GHCR build
-.env.template            copied to .env on first run
+backend/
+  models/barber.py                     prestations, réglages, horaires, réservations, notifications
+  alembic/versions/*barber_domain.py   migration, contrainte anti double réservation, données initiales
+  app/admin/api/v1/barber.py           API client
+  app/admin/api/v1/barber_admin.py     API dashboard (DependsAdmin)
+  app/admin/service/
+    availability_service.py            calcul des créneaux
+    booking_service.py                 réservations, transitions, expiration
+    notification_service.py            messages + file d'envoi GOWA avec relances
+    workers.py                         tâche de fond (expiration + envois)
+  common/whatsapp/gowa.py              client GOWA unique
+client/                                Next.js (réservation, espace client, dashboard)
+tests/                                 pytest
+compose.image.yml                      production Dokploy (images GHCR, GOWA partagé)
 ```
-
-## License
-
-MIT
