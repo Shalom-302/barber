@@ -72,3 +72,11 @@ async def test_relogin_existing_user_does_not_need_pseudo(http):
     again = await login(http, phone, pseudo=None)
     assert again['login']['is_new_user'] is False
     assert again['login']['needs_pseudo'] is False
+
+
+@pytest.mark.parametrize('typed', ['01712116258', '+225 0171211625 8', '+225 07 01 02 03 04 05'])
+def test_ivorian_numbers_with_wrong_length_are_refused(typed):
+    from backend.utils.phone import normalize_phone
+
+    with pytest.raises(ValueError):
+        normalize_phone(typed)

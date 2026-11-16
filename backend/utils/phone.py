@@ -37,4 +37,8 @@ def normalize_phone(value: str) -> str:
         digits = cc + digits
     if not (8 <= len(digits) <= 15):
         raise ValueError('Numéro de téléphone invalide (indicatif + numéro).')
+    # Côte d'Ivoire: 10 national digits since 2021 (8 before). Anything else is
+    # a typo that would create an account WhatsApp can never reach.
+    if digits.startswith('225') and len(digits) not in (13, 11):
+        raise ValueError('Numéro ivoirien invalide : 10 chiffres attendus (ex. 07 01 02 03 04).')
     return digits
