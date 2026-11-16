@@ -106,6 +106,11 @@ class Settings(BaseSettings):
         f'/admin{FASTAPI_API_V1_PATH}/auth/token/new',
         f'/admin{FASTAPI_API_V1_PATH}/auth/whatsapp/request-otp',
         f'/admin{FASTAPI_API_V1_PATH}/auth/whatsapp/verify-otp',
+        # Public BARBER data: a stale token in the browser must never hide it.
+        f'/admin{FASTAPI_API_V1_PATH}/barber/services',
+        f'/admin{FASTAPI_API_V1_PATH}/barber/profile',
+        f'/admin{FASTAPI_API_V1_PATH}/barber/hours',
+        f'/admin{FASTAPI_API_V1_PATH}/barber/availability',
     ]
 
     # JWT

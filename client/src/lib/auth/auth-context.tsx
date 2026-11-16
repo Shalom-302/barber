@@ -79,7 +79,8 @@ export function useAuth(): AuthContextValue {
 
 /** Only allow same-site relative redirects (no open redirect). */
 export function safeNext(next: string | null | undefined, fallback = "/reserver"): string {
-    if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/auth")) {
+    // "/" (the landing) is never a useful destination after logging in.
+    if (!next || next === "/" || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/auth")) {
         return fallback;
     }
     return next;

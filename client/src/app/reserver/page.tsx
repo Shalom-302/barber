@@ -14,6 +14,7 @@ import { barberApi, type Booking, type PublicProfile, type Service, type Slot } 
 import { ApiError, errorMessage } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { addDaysISO, formatDateTime, formatDuration, formatPrice, formatTime, TIMEZONE, todayISO } from "@/lib/barber/format";
+import { OTHER_QUARTIER, quartiersFor } from "@/lib/barber/quartiers";
 import { cn } from "@/lib/utils/cn";
 
 type Draft = {
@@ -169,6 +170,13 @@ function BookingFlow() {
     }, [draft, ready, done]);
 
     const service = useMemo(() => services?.find(s => s.id === draft.serviceId) ?? null, [services, draft.serviceId]);
+    const quartierOptions = useMemo(() => quartiersFor(draft.commune), [draft.commune]);
+    // Free-text quartier when "Autre quartier" is chosen, or when a restored
+    // draft holds a quartier that is not in the list.
+    const [otherQuartier, setOtherQuartier] = useState(false);
+    useEffect(() => {
+        if (draft.quartier && quartierOptions.length && !quartierOptions.includes(draft.quartier)) setOtherQuartier(true);
+    }, [draft.quartier, quartierOptions]);
     const days = useMemo(() => {
         const today = todayISO();
         const n = profile?.horizon_days ?? 30;
@@ -477,33 +485,80 @@ function BookingFlow() {
                     className="card space-y-5"
                     id="address-form"
                 >
-                    <div>
-                        <p className="label">Commune</p>
-                        <div className="flex flex-wrap gap-2">
-                            {profile?.communes.map(c => (
-                                <button
-                                    key={c}
-                                    type="button"
-                                    onClick={() => update({ commune: c })}
-                                    className={cn(
-                                        "rounded-full border px-3.5 py-2 text-sm font-medium transition",
-                                        draft.commune === c ? "border-ink bg-ink text-cream" : "border-kx-border bg-white hover:border-brass/60"
-                                    )}
-                                >
-                                    {c}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
                     <div className="grid gap-5 sm:grid-cols-2">
                         <div>
-                            <label className="label" htmlFor="quartier">Quartier</label>
-                            <input id="quartier" className="input" value={draft.quartier} onChange={e => update({ quartier: e.target.value })} placeholder="Ex. Angré 8e tranche" minLength={2} maxLength={80} required />
+                            <label className="label" htmlFor="commune">Commune</label>
+                            <select
+                                id="commune"
+                                className="input select-input"
+                                value={draft.commune}
+                                onChange={e => {
+                                    setOtherQuartier(false);
+                                    update({ commune: e.target.value, quartier: "" });
+                                }}
+                                required
+                            >
+                                <option value="" disabled>
+                                    Choisissez votre commune
+                                </option>
+                                {profile?.communes.map(c => (
+                                    <option key={c} value={c}>
+                                        {c}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div>
-                            <label className="label" htmlFor="address">Adresse</label>
-                            <input id="address" className="input" value={draft.address} onChange={e => update({ address: e.target.value })} placeholder="Rue, immeuble, villa…" minLength={3} maxLength={300} required />
+                            <label className="label" htmlFor="quartier">Quartier</label>
+                            {quartierOptions.length > 0 && !otherQuartier ? (
+                                <select
+                                    id="quartier"
+                                    className="input select-input"
+                                    value={quartierOptions.includes(draft.quartier) ? draft.quartier : ""}
+                                    onChange={e => {
+                                        if (e.target.value === OTHER_QUARTIER) {
+                                            setOtherQuartier(true);
+                                            update({ quartier: "" });
+                                        } else update({ quartier: e.target.value });
+                                    }}
+                                    disabled={!draft.commune}
+                                    required
+                                >
+                                    <option value="" disabled>
+                                        Choisissez votre quartier
+                                    </option>
+                                    {quartierOptions.map(q => (
+                                        <option key={q} value={q}>
+                                            {q}
+                                        </option>
+                                    ))}
+                                    <option value={OTHER_QUARTIER}>Autre quartier…</option>
+                                </select>
+                            ) : (
+                                <>
+                                    <input
+                                        id="quartier"
+                                        className="input"
+                                        value={draft.quartier}
+                                        onChange={e => update({ quartier: e.target.value })}
+                                        placeholder={draft.commune ? "Nom de votre quartier" : "Choisissez d'abord la commune"}
+                                        disabled={!draft.commune}
+                                        minLength={2}
+                                        maxLength={80}
+                                        required
+                                    />
+                                    {quartierOptions.length > 0 && (
+                                        <button type="button" className="hint underline underline-offset-2" onClick={() => { setOtherQuartier(false); update({ quartier: "" }); }}>
+                                            Revenir à la liste des quartiers
+                                        </button>
+                                    )}
+                                </>
+                            )}
                         </div>
+                    </div>
+                    <div>
+                        <label className="label" htmlFor="address">Adresse</label>
+                        <input id="address" className="input" value={draft.address} onChange={e => update({ address: e.target.value })} placeholder="Rue, immeuble, villa…" minLength={3} maxLength={300} required />
                     </div>
                     <div>
                         <label className="label" htmlFor="landmark">Point de repère <span className="font-normal text-kx-muted">(facultatif)</span></label>

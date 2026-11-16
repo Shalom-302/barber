@@ -43,6 +43,11 @@ http.interceptors.request.use(config => {
 // Paths that must never trigger a refresh-and-retry.
 const NO_REFRESH = ["/auth/login", "/auth/register", "/auth/token/new", "/auth/whatsapp"];
 
+/** Pages that require a session (the landing and /auth/* never redirect). */
+function isProtectedPath(path: string): boolean {
+    return ["/admin", "/mes-rendez-vous", "/profile", "/dashboard"].some(p => path === p || path.startsWith(`${p}/`));
+}
+
 let refreshing: Promise<string | null> | null = null;
 
 /** Single-flight refresh: concurrent 401s share one /auth/token/new call. */
@@ -85,9 +90,23 @@ http.interceptors.response.use(
             config._retried = true;
             const token = await refreshAccessToken();
             if (token) return http(config);
-            if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
-                const next = encodeURIComponent(window.location.pathname);
-                window.location.href = `/auth/login?next=${next}`;
+            // Session is gone (token cleared). Public data (services, hours,
+            // profile...) must still load: retry once anonymously.
+            if (config.headers) delete (config.headers as Record<string, unknown>).Authorization;
+            try {
+                return await http(config);
+            } catch (retryError) {
+                // Still 401: the page really needs a session.
+                if (
+                    retryError instanceof ApiError &&
+                    retryError.status === 401 &&
+                    typeof window !== "undefined" &&
+                    isProtectedPath(window.location.pathname)
+                ) {
+                    const next = encodeURIComponent(window.location.pathname);
+                    window.location.href = `/auth/login?next=${next}`;
+                }
+                throw retryError;
             }
         }
         const status = error.response?.status ?? 0;

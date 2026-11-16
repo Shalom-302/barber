@@ -28,7 +28,7 @@ function LoginContent() {
     // Already logged in (or just logged in): ask for a pseudo once, else go on.
     useEffect(() => {
         if (loading || !isAuthenticated || !user) return;
-        const target = (u: User) => safeNext(next, isAdmin(u) ? "/admin" : "/reserver");
+        const target = (u: User) => safeNext(next, isAdmin(u) ? "/admin" : "/mes-rendez-vous");
         if (!user.pseudo && !isAdmin(user)) setStep("pseudo");
         else router.replace(target(user));
     }, [loading, isAuthenticated, user, next, router]);

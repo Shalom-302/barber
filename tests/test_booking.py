@@ -366,3 +366,12 @@ async def test_admin_clients_list(http):
     items = r.json()['data']['items']
     assert len(items) == 1 and items[0]['bookings_total'] == 1
     assert items[0]['last_commune'] == 'Cocody' and items[0]['whatsapp_url'].startswith('https://wa.me/225')
+
+
+async def test_public_routes_ignore_a_stale_token(http):
+    stale = {'Authorization': 'Bearer not-a-valid-token', **fresh_ip()}
+    for path in ['/barber/services', '/barber/profile', '/barber/hours']:
+        r = await http.get(path, headers=stale)
+        assert r.status_code == 200, (path, r.text)
+    r = await http.get('/barber/bookings', headers=stale)
+    assert r.status_code == 401
