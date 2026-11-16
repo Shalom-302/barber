@@ -26,6 +26,10 @@ export type PublicProfile = {
     horizon_days: number;
 };
 
+export type OpeningDay = { weekday: number; is_open: boolean; start_time: string; end_time: string };
+export type OpeningBreak = { id: number; weekday: number; start_time: string; end_time: string; label?: string | null };
+export type OpeningHours = { days: OpeningDay[]; breaks: OpeningBreak[] };
+
 export type Slot = { start_at: string; end_at: string };
 export type Availability = { date: string; service_id: number; slots: Slot[] };
 
@@ -137,6 +141,7 @@ type Query = Record<string, string | number | undefined>;
 export const barberApi = {
     services: () => api<Service[]>({ method: "GET", url: "/barber/services" }),
     profile: () => api<PublicProfile>({ method: "GET", url: "/barber/profile" }),
+    hours: () => api<OpeningHours>({ method: "GET", url: "/barber/hours" }),
     availability: (serviceId: number, date: string) =>
         api<Availability>({ method: "GET", url: "/barber/availability", params: { service_id: serviceId, date } }),
     createBooking: (data: BookingInput) => api<Booking>({ method: "POST", url: "/barber/bookings", data }),
