@@ -61,10 +61,10 @@ export default function AppearanceSettings() {
                 <Card.Header>
                     <Card.Title className="flex items-center gap-2">
                         <Palette className="h-5 w-5" />
-                        Appearance
+                        Apparence
                     </Card.Title>
                     <Card.Description>
-                        Customize how the application looks
+                        Personnalisez l’apparence de l’application
                     </Card.Description>
                 </Card.Header>
                 <Card.Content>
@@ -83,40 +83,40 @@ export default function AppearanceSettings() {
             <Card.Header>
                 <Card.Title className="flex items-center gap-2">
                     <Palette className="h-5 w-5" />
-                    Appearance
+                    Apparence
                 </Card.Title>
                 <Card.Description>
-                    Customize how the application looks
+                    Personnalisez l’apparence de l’application
                 </Card.Description>
             </Card.Header>
             <Card.Content>
                 <div className="space-y-6">
                     <div>
-                        <h3 className="text-sm font-medium text-secondary mb-4">Theme</h3>
+                        <h3 className="text-sm font-medium text-secondary mb-4">Thème</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <ThemeCard
                                 theme="light"
                                 currentTheme={theme}
                                 onSelect={setTheme}
                                 icon={<Sun className="h-6 w-6" />}
-                                label="Light"
-                                description="A bright theme for daytime use"
+                                label="Clair"
+                                description="Un thème lumineux pour la journée"
                             />
                             <ThemeCard
                                 theme="dark"
                                 currentTheme={theme}
                                 onSelect={setTheme}
                                 icon={<Moon className="h-6 w-6" />}
-                                label="Dark"
-                                description="A dark theme that's easy on the eyes"
+                                label="Sombre"
+                                description="Un thème sombre, reposant pour les yeux"
                             />
                             <ThemeCard
                                 theme="system"
                                 currentTheme={theme}
                                 onSelect={setTheme}
                                 icon={<Monitor className="h-6 w-6" />}
-                                label="System"
-                                description="Follows your device settings"
+                                label="Système"
+                                description="Suit les réglages de l’appareil"
                             />
                         </div>
                     </div>

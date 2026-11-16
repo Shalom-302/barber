@@ -1,7 +1,8 @@
 "use client";
 
 // Passwordless login: WhatsApp number -> one-time code -> session.
-// Adapted from the Foody implementation (generic: any country, no pseudo step).
+// Adapted from the Foody implementation. Ivorian numbers: the current 10-digit
+// numbering (07 01 02 03 04) is accepted as typed; the API normalizes it.
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { InputOTPCustom } from "@/components/ui/input/input-otp";
 import { errorMessage } from "@/lib/api/client";
 import { authApi, type LoginResult } from "@/lib/api/services";
+import { formatPhone } from "@/lib/barber/format";
 import { FieldLabel, FormError } from "./auth-card";
 
 const CODE_LENGTH = 6;
@@ -63,26 +65,26 @@ export function WhatsappLogin({ onSuccess }: { onSuccess: (result: LoginResult) 
         return (
             <form onSubmit={sendCode} className="space-y-5">
                 <div>
-                    <FieldLabel htmlFor="phone">WhatsApp number</FieldLabel>
+                    <FieldLabel htmlFor="phone">Numéro WhatsApp</FieldLabel>
                     <Input
                         id="phone"
                         type="tel"
                         inputMode="tel"
                         autoComplete="tel"
-                        placeholder="+33 6 12 34 56 78"
+                        placeholder="07 01 02 03 04"
                         value={phone}
                         onChange={e => setPhone(e.target.value)}
                         required
                         size="md"
                     />
                     <p className="mt-1.5 text-sm text-tertiary">
-                        International format, with the country code. We will send you a code on
-                        WhatsApp.
+                        Numéro à 10 chiffres (ex. 07 01 02 03 04) ou avec l&apos;indicatif +225.
+                        Vous recevrez un code de connexion sur WhatsApp.
                     </p>
                 </div>
                 <FormError message={error} />
                 <Button type="submit" size="lg" className="w-full" isLoading={loading}>
-                    Receive my code
+                    Recevoir mon code
                 </Button>
             </form>
         );
@@ -91,8 +93,8 @@ export function WhatsappLogin({ onSuccess }: { onSuccess: (result: LoginResult) 
     return (
         <div className="space-y-5">
             <p className="text-sm text-tertiary">
-                Enter the {CODE_LENGTH}-digit code sent on WhatsApp to{" "}
-                <span className="font-semibold text-secondary">+{normalized}</span>.
+                Saisissez le code à {CODE_LENGTH} chiffres reçu sur WhatsApp au{" "}
+                <span className="font-semibold text-secondary">{formatPhone(normalized)}</span>.
             </p>
             <InputOTPCustom.Root size="sm" disabled={loading}>
                 <InputOTPCustom.Group
@@ -121,7 +123,7 @@ export function WhatsappLogin({ onSuccess }: { onSuccess: (result: LoginResult) 
                 isDisabled={code.length !== CODE_LENGTH}
                 onClick={() => verify(code)}
             >
-                Log in
+                Se connecter
             </Button>
             <div className="flex items-center justify-between text-sm">
                 <button
@@ -132,7 +134,7 @@ export function WhatsappLogin({ onSuccess }: { onSuccess: (result: LoginResult) 
                         setError(null);
                     }}
                 >
-                    Change number
+                    Changer de numéro
                 </button>
                 <button
                     type="button"
@@ -140,7 +142,7 @@ export function WhatsappLogin({ onSuccess }: { onSuccess: (result: LoginResult) 
                     className="font-semibold text-brand-secondary disabled:text-disabled"
                     onClick={() => sendCode()}
                 >
-                    {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
+                    {resendIn > 0 ? `Renvoyer dans ${resendIn} s` : "Renvoyer le code"}
                 </button>
             </div>
         </div>

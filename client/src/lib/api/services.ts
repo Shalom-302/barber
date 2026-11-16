@@ -17,6 +17,7 @@ export type User = {
     firstname?: string | null;
     lastname?: string | null;
     phone?: string | null;
+    pseudo?: string | null;
     email?: string | null;
     status?: boolean;
     join_time?: string;
@@ -29,6 +30,7 @@ export type LoginResult = {
     access_token_expire_time: string;
     user: User;
     is_new_user?: boolean;
+    needs_pseudo?: boolean;
 };
 
 export type OtpRequestResult = {
@@ -80,7 +82,7 @@ export const authApi = {
     verifyOtp: (phone: string, code: string) =>
         api<LoginResult>({ method: "POST", url: "/auth/whatsapp/verify-otp", data: { phone, code } }),
     me: () => api<User>({ method: "GET", url: "/auth/me" }),
-    updateMe: (data: { firstname?: string; lastname?: string }) =>
+    updateMe: (data: { firstname?: string; lastname?: string; pseudo?: string }) =>
         api<null>({ method: "PATCH", url: "/auth/me", data }),
     logout: () => api<null>({ method: "POST", url: "/auth/logout" }),
 };
@@ -113,5 +115,5 @@ export function isAdmin(user: User | null | undefined): boolean {
 export function displayName(user: User | null | undefined): string {
     if (!user) return "";
     const full = [user.firstname, user.lastname].filter(Boolean).join(" ");
-    return full || user.email || (user.phone ? `+${user.phone}` : "User");
+    return user.pseudo || full || user.email || (user.phone ? `+${user.phone}` : "Utilisateur");
 }

@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input";
 import { adminApi, displayName, type User } from "@/lib/api/services";
 
 const columns: Column<User>[] = [
-    { header: "Name", cell: u => <span className="font-medium text-primary">{displayName(u)}</span> },
+    { header: "Nom", cell: u => <span className="font-medium text-primary">{displayName(u)}</span> },
     { header: "Email", cell: u => u.email || "—" },
     { header: "WhatsApp", cell: u => (u.phone ? `+${u.phone}` : "—") },
     {
-        header: "Roles",
+        header: "Rôles",
         cell: u => (
             <div className="flex flex-wrap gap-1">
                 {(u.roles ?? []).map(r => (
@@ -24,14 +24,14 @@ const columns: Column<User>[] = [
         ),
     },
     {
-        header: "Status",
+        header: "Statut",
         cell: u => (
             <Badge size="sm" color={u.status === false ? "error" : "success"}>
-                {u.status === false ? "Disabled" : "Active"}
+                {u.status === false ? "Désactivé" : "Actif"}
             </Badge>
         ),
     },
-    { header: "Joined", cell: u => formatDate(u.join_time) },
+    { header: "Inscription", cell: u => formatDate(u.join_time) },
 ];
 
 export default function AdminUsersPage() {
@@ -45,12 +45,12 @@ export default function AdminUsersPage() {
     return (
         <>
             <PageHeader
-                title="Users"
-                description="Everyone who signed up, by email or WhatsApp."
+                title="Utilisateurs"
+                description="Tous les comptes (clients et barbier)."
                 action={
                     <div className="w-72">
                         <Input
-                            placeholder="Search…"
+                            placeholder="Rechercher…"
                             value={query}
                             onChange={e => {
                                 setQuery(e.target.value);
@@ -60,7 +60,7 @@ export default function AdminUsersPage() {
                     </div>
                 }
             />
-            <DataTable columns={columns} paged={paged} empty="No users yet." />
+            <DataTable columns={columns} paged={paged} empty="Aucun utilisateur." />
         </>
     );
 }

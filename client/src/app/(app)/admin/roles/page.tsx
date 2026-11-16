@@ -33,7 +33,7 @@ export default function AdminRolesPage() {
         try {
             if (draft.id) await adminApi.updateRole(draft.id, body);
             else await adminApi.createRole(body);
-            toast.success(draft.id ? "Role updated" : "Role created");
+            toast.success(draft.id ? "Rôle modifié" : "Rôle créé");
             setDraft(null);
             await paged.reload();
         } catch (err) {
@@ -44,10 +44,10 @@ export default function AdminRolesPage() {
     }
 
     async function remove(role: Role) {
-        if (!window.confirm(`Delete role "${role.name}"?`)) return;
+        if (!window.confirm(`Supprimer le rôle « ${role.name} » ?`)) return;
         try {
             await adminApi.deleteRoles([role.id]);
-            toast.success("Role deleted");
+            toast.success("Rôle supprimé");
             await paged.reload();
         } catch (err) {
             toast.error(errorMessage(err));
@@ -55,17 +55,17 @@ export default function AdminRolesPage() {
     }
 
     const columns: Column<Role>[] = [
-        { header: "Name", cell: r => <span className="font-medium text-primary">{r.name}</span> },
+        { header: "Nom", cell: r => <span className="font-medium text-primary">{r.name}</span> },
         {
-            header: "Status",
+            header: "Statut",
             cell: r => (
                 <Badge size="sm" color={r.status ? "success" : "gray"}>
-                    {r.status ? "Enabled" : "Disabled"}
+                    {r.status ? "Actif" : "Désactivé"}
                 </Badge>
             ),
         },
         { header: "Note", cell: r => r.remark || "—" },
-        { header: "Created", cell: r => formatDate(r.created_time) },
+        { header: "Créé le", cell: r => formatDate(r.created_time) },
         {
             header: "",
             className: "text-right",
@@ -79,11 +79,11 @@ export default function AdminRolesPage() {
                             setDraft({ id: r.id, name: r.name, status: r.status, remark: r.remark ?? "" });
                         }}
                     >
-                        Edit
+                        Modifier
                     </Button>
                     {!PROTECTED.includes(r.name) && (
                         <Button variant="tertiary-destructive" size="sm" onClick={() => remove(r)}>
-                            Delete
+                            Supprimer
                         </Button>
                     )}
                 </div>
@@ -94,8 +94,8 @@ export default function AdminRolesPage() {
     return (
         <>
             <PageHeader
-                title="Roles"
-                description="Users with the admin role can access this space."
+                title="Rôles"
+                description="Le rôle admin donne accès au tableau de bord du barbier."
                 action={
                     <Button
                         size="md"
@@ -104,21 +104,21 @@ export default function AdminRolesPage() {
                             setDraft({ name: "", status: 1, remark: "" });
                         }}
                     >
-                        New role
+                        Nouveau rôle
                     </Button>
                 }
             />
-            <DataTable columns={columns} paged={paged} empty="No roles yet." />
+            <DataTable columns={columns} paged={paged} empty="Aucun rôle." />
 
             <Dialog
                 open={draft !== null}
                 onOpenChange={open => !open && setDraft(null)}
-                title={draft?.id ? "Edit role" : "New role"}
+                title={draft?.id ? "Modifier le rôle" : "Nouveau rôle"}
                 content={
                     draft && (
                         <form onSubmit={save} className="space-y-4">
                             <div>
-                                <FieldLabel htmlFor="role-name">Name</FieldLabel>
+                                <FieldLabel htmlFor="role-name">Nom</FieldLabel>
                                 <Input
                                     id="role-name"
                                     value={draft.name}
@@ -141,15 +141,15 @@ export default function AdminRolesPage() {
                                     checked={draft.status === 1}
                                     onChange={e => setDraft({ ...draft, status: e.target.checked ? 1 : 0 })}
                                 />
-                                Enabled
+                                Actif
                             </label>
                             <FormError message={error} />
                             <div className="flex justify-end gap-2">
                                 <Button variant="secondary" onClick={() => setDraft(null)}>
-                                    Cancel
+                                    Annuler
                                 </Button>
                                 <Button type="submit" isLoading={saving}>
-                                    Save
+                                    Enregistrer
                                 </Button>
                             </div>
                         </form>

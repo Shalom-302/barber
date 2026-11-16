@@ -1,40 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AuthCard } from "@/components/auth/auth-card";
-import { EmailPasswordForm } from "@/components/auth/email-login";
-import { authApi, type LoginResult } from "@/lib/api/services";
-import { useAuth } from "@/lib/auth/auth-context";
-
+// BARBER uses WhatsApp only: the account is created at the first WhatsApp login.
+// (The email form component is kept in components/auth/email-login.tsx.)
 export default function RegisterPage() {
-    const router = useRouter();
-    const { setSession } = useAuth();
-
-    function onSuccess(result: LoginResult) {
-        setSession(result);
-        router.replace("/dashboard");
-    }
-
-    return (
-        <AuthCard
-            title="Create an account"
-            subtitle="Sign up with your email. With WhatsApp, your account is created on first login."
-            footer={
-                <>
-                    Already have an account?{" "}
-                    <Link href="/auth/login" className="font-semibold text-brand-secondary">
-                        Log in
-                    </Link>
-                </>
-            }
-        >
-            <EmailPasswordForm
-                submitLabel="Create my account"
-                onSubmit={authApi.register}
-                onSuccess={onSuccess}
-                passwordAutoComplete="new-password"
-            />
-        </AuthCard>
-    );
+    redirect("/auth/login");
 }

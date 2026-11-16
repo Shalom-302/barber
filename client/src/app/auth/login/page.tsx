@@ -1,72 +1,50 @@
 "use client";
 
+// WhatsApp-only login: number -> code -> (first time) pseudo -> ?next=.
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthCard } from "@/components/auth/auth-card";
-import { EmailPasswordForm } from "@/components/auth/email-login";
+import { PseudoForm } from "@/components/auth/pseudo-form";
 import { WhatsappLogin } from "@/components/auth/whatsapp-login";
-import { authApi, isAdmin, type LoginResult } from "@/lib/api/services";
+import { isAdmin, type LoginResult, type User } from "@/lib/api/services";
 import { safeNext, useAuth } from "@/lib/auth/auth-context";
-import { cn } from "@/lib/utils/cn";
 
 function LoginContent() {
     const router = useRouter();
     const params = useSearchParams();
-    const { setSession, isAuthenticated, user } = useAuth();
-    const [mode, setMode] = useState<"whatsapp" | "email">("whatsapp");
+    const { setSession, isAuthenticated, user, refreshUser, loading } = useAuth();
+    const [step, setStep] = useState<"login" | "pseudo">("login");
+    const next = params.get("next");
 
-    const fallback = (u: LoginResult["user"] | null) => (isAdmin(u) ? "/admin" : "/dashboard");
-
+    // Already logged in (or just logged in): ask for a pseudo once, else go on.
     useEffect(() => {
-        if (isAuthenticated) router.replace(safeNext(params.get("next"), fallback(user)));
-    }, [isAuthenticated, user, params, router]);
+        if (loading || !isAuthenticated || !user) return;
+        const target = (u: User) => safeNext(next, isAdmin(u) ? "/admin" : "/reserver");
+        if (!user.pseudo && !isAdmin(user)) setStep("pseudo");
+        else router.replace(target(user));
+    }, [loading, isAuthenticated, user, next, router]);
 
     function onSuccess(result: LoginResult) {
         setSession(result);
-        router.replace(safeNext(params.get("next"), fallback(result.user)));
+    }
+
+    if (step === "pseudo") {
+        return (
+            <AuthCard
+                title="Choisissez un pseudo"
+                subtitle="Une seule fois : il sera affiché au barbier avec vos rendez-vous."
+            >
+                <PseudoForm initial={user?.pseudo ?? ""} onDone={refreshUser} />
+            </AuthCard>
+        );
     }
 
     return (
         <AuthCard
-            title="Log in"
-            subtitle="Welcome back! Choose how you want to sign in."
-            footer={
-                <>
-                    No account yet?{" "}
-                    <Link href="/auth/register" className="font-semibold text-brand-secondary">
-                        Sign up
-                    </Link>
-                </>
-            }
+            title="Connexion"
+            subtitle="Pas de mot de passe : recevez un code sur WhatsApp. Votre compte est créé automatiquement."
         >
-            <div className="mb-6 grid grid-cols-2 gap-1 rounded-lg bg-secondary p-1">
-                {(
-                    [
-                        ["whatsapp", "WhatsApp"],
-                        ["email", "Email"],
-                    ] as const
-                ).map(([value, label]) => (
-                    <button
-                        key={value}
-                        type="button"
-                        onClick={() => setMode(value)}
-                        className={cn(
-                            "rounded-md px-3 py-2 text-sm font-semibold transition-colors",
-                            mode === value
-                                ? "bg-primary text-secondary shadow-sm"
-                                : "text-quaternary hover:text-secondary"
-                        )}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-            {mode === "whatsapp" ? (
-                <WhatsappLogin onSuccess={onSuccess} />
-            ) : (
-                <EmailPasswordForm submitLabel="Log in" onSubmit={authApi.login} onSuccess={onSuccess} />
-            )}
+            <WhatsappLogin onSuccess={onSuccess} />
         </AuthCard>
     );
 }

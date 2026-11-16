@@ -93,7 +93,7 @@ http.interceptors.response.use(
         const status = error.response?.status ?? 0;
         const msg =
             error.response?.data?.msg ||
-            (status === 0 ? "Network error, check your connection." : error.message);
+            (status === 0 ? "Erreur réseau, vérifiez votre connexion." : error.message);
         return Promise.reject(new ApiError(msg, status));
     }
 );
@@ -104,7 +104,7 @@ export async function api<T>(config: AxiosRequestConfig): Promise<T> {
     return res.data.data;
 }
 
-export function errorMessage(err: unknown, fallback = "Something went wrong."): string {
+export function errorMessage(err: unknown, fallback = "Une erreur est survenue."): string {
     if (err instanceof ApiError) return err.message;
     if (err instanceof Error) return err.message;
     return fallback;

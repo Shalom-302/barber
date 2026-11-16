@@ -1,124 +1,139 @@
 "use client";
 
 import Link from "next/link";
-import {
-    MessageChatCircle,
-    ShieldTick,
-    Users01,
-    Server01,
-    Lock01,
-    Container,
-} from "@untitled-ui/icons-react";
+import { useEffect, useState } from "react";
+import { motion } from "motion/react";
+import { CalendarCheck01, CheckCircle, MessageChatCircle, Scissors01 } from "@untitled-ui/icons-react";
+import { Card, ContactButtons, Spinner } from "@/components/barber/ui";
+import { PublicShell } from "@/components/barber/public-shell";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { siteConfig } from "@/config/site";
-import { useAuth } from "@/lib/auth/auth-context";
+import { barberApi, type PublicProfile, type Service } from "@/lib/api/barber";
+import { errorMessage } from "@/lib/api/client";
+import { formatDuration, formatPrice } from "@/lib/barber/format";
 
-const features = [
+const steps = [
+    {
+        icon: Scissors01,
+        title: "Vous choisissez",
+        text: "La prestation, le jour, l'heure et l'adresse où le barbier vient vous coiffer.",
+    },
+    {
+        icon: CheckCircle,
+        title: "Le barbier confirme",
+        text: "Votre demande est en attente jusqu'à la confirmation du barbier.",
+    },
     {
         icon: MessageChatCircle,
-        title: "WhatsApp login",
-        text: "Passwordless sign-in with a one-time code sent on WhatsApp. Accounts are created on first login.",
-    },
-    {
-        icon: Lock01,
-        title: "Email & password",
-        text: "Classic sign-up and login, JWT access tokens and rotating httpOnly refresh cookies.",
-    },
-    {
-        icon: ShieldTick,
-        title: "Roles & permissions",
-        text: "Admin and user spaces, role management and Casbin policies on the API.",
-    },
-    {
-        icon: Users01,
-        title: "Admin space",
-        text: "Manage users and roles, review login and operation logs.",
-    },
-    {
-        icon: Server01,
-        title: "FastAPI backend",
-        text: "Async SQLAlchemy, Alembic migrations, Redis, MinIO and OpenAPI docs.",
-    },
-    {
-        icon: Container,
-        title: "Docker ready",
-        text: "One command to run the whole stack locally, prebuilt images for production.",
+        title: "Vous êtes prévenu",
+        text: "Confirmation, refus ou annulation : vous recevez une notification WhatsApp.",
     },
 ];
 
 export default function Home() {
-    const { isAuthenticated } = useAuth();
+    const [services, setServices] = useState<Service[] | null>(null);
+    const [profile, setProfile] = useState<PublicProfile | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        barberApi.services().then(setServices).catch(e => setError(errorMessage(e)));
+        barberApi.profile().then(setProfile).catch(() => setProfile(null));
+    }, []);
+
+    const name = profile?.display_name ?? "votre barbier";
 
     return (
-        <div className="flex min-h-screen flex-col bg-primary">
-            <header className="border-b border-secondary">
-                <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 md:px-8">
-                    <Link href="/" className="text-xl font-bold text-primary">
-                        {siteConfig.name}
-                    </Link>
-                    <div className="flex-1" />
-                    <ThemeToggle />
-                    {isAuthenticated ? (
-                        <Button asChild size="md">
-                            <Link href="/dashboard">Dashboard</Link>
-                        </Button>
-                    ) : (
-                        <>
-                            <Button asChild variant="tertiary" size="md">
-                                <Link href="/auth/login">Log in</Link>
-                            </Button>
-                            <Button asChild size="md">
-                                <Link href="/auth/register">Sign up</Link>
-                            </Button>
-                        </>
-                    )}
+        <PublicShell>
+            <motion.section
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="rounded-2xl bg-brand-solid px-6 py-10 text-white sm:px-10 sm:py-14"
+            >
+                <p className="text-sm font-semibold uppercase tracking-wide opacity-80">Coiffure à domicile · Abidjan</p>
+                <h1 className="mt-3 max-w-2xl text-display-sm font-semibold sm:text-display-md">
+                    Réservez {name} en quelques secondes.
+                </h1>
+                <p className="mt-4 max-w-xl text-lg opacity-90">
+                    Choisissez votre créneau, indiquez votre quartier : le barbier vient chez vous. Connexion
+                    simple avec votre numéro WhatsApp.
+                </p>
+                <div className="mt-8 flex flex-wrap gap-3">
+                    <Button asChild size="xl" variant="secondary">
+                        <Link href="/reserver">Réserver maintenant</Link>
+                    </Button>
                 </div>
-            </header>
+            </motion.section>
 
-            <main className="flex-1">
-                <section className="mx-auto max-w-4xl px-4 py-20 text-center md:py-28">
-                    <h1 className="text-display-md font-semibold tracking-tight text-primary md:text-display-xl">
-                        Welcome to {siteConfig.name}
-                    </h1>
-                    <p className="mx-auto mt-6 max-w-2xl text-lg text-tertiary md:text-xl">
-                        {siteConfig.description}
-                    </p>
-                    <div className="mt-10 flex flex-wrap justify-center gap-3">
-                        <Button asChild size="xl">
-                            <Link href={isAuthenticated ? "/dashboard" : "/auth/login"}>
-                                {isAuthenticated ? "Open the app" : "Get started"}
-                            </Link>
-                        </Button>
-                        <Button asChild size="xl" variant="secondary">
-                            <a href="/admin/api/v1/docs" target="_blank" rel="noreferrer">
-                                API docs
-                            </a>
-                        </Button>
-                    </div>
-                </section>
+            <section className="mt-10">
+                <h2 className="text-display-xs font-semibold text-primary">Prestations</h2>
+                {error && <p className="mt-4 text-sm text-error-primary">{error}</p>}
+                {!services && !error && <Spinner />}
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    {services?.map((s, i) => (
+                        <motion.div
+                            key={s.id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.05 * i }}
+                        >
+                            <Card className="flex h-full flex-col">
+                                <div className="flex items-start justify-between gap-3">
+                                    <h3 className="text-lg font-semibold text-primary">{s.name}</h3>
+                                    <span className="shrink-0 text-lg font-bold text-brand-secondary">
+                                        {formatPrice(s.price)}
+                                    </span>
+                                </div>
+                                {s.description && <p className="mt-2 text-sm text-tertiary">{s.description}</p>}
+                                <p className="mt-2 text-sm text-quaternary">Durée : {formatDuration(s.duration_minutes)}</p>
+                                <div className="mt-auto pt-4">
+                                    <Button asChild size="md" className="w-full">
+                                        <Link href={`/reserver?service=${s.id}`}>Réserver cette prestation</Link>
+                                    </Button>
+                                </div>
+                            </Card>
+                        </motion.div>
+                    ))}
+                </div>
+            </section>
 
-                <section className="mx-auto max-w-6xl px-4 pb-24 md:px-8">
-                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {features.map(f => (
-                            <div
-                                key={f.title}
-                                className="rounded-xl border border-secondary bg-primary p-6 shadow-xs"
-                            >
-                                <span className="flex size-10 items-center justify-center rounded-lg bg-brand-secondary">
-                                    <f.icon className="size-5 text-fg-brand-primary" />
-                                </span>
-                                <h3 className="mt-4 text-lg font-semibold text-primary">{f.title}</h3>
-                                <p className="mt-2 text-md text-tertiary">{f.text}</p>
+            <section className="mt-12">
+                <h2 className="text-display-xs font-semibold text-primary">Comment ça marche</h2>
+                <ol className="mt-4 grid gap-4 sm:grid-cols-3">
+                    {steps.map((s, i) => (
+                        <li key={s.title}>
+                            <Card className="h-full">
+                                <div className="flex items-center gap-3">
+                                    <span className="flex size-10 items-center justify-center rounded-full bg-brand-primary text-brand-secondary">
+                                        <s.icon className="size-5" />
+                                    </span>
+                                    <span className="text-sm font-semibold text-quaternary">Étape {i + 1}</span>
+                                </div>
+                                <h3 className="mt-3 font-semibold text-primary">{s.title}</h3>
+                                <p className="mt-1 text-sm text-tertiary">{s.text}</p>
+                            </Card>
+                        </li>
+                    ))}
+                </ol>
+            </section>
+
+            {profile && (profile.whatsapp_url || profile.call_url) && (
+                <section className="mt-12">
+                    <Card>
+                        <div className="flex items-start gap-3">
+                            <CalendarCheck01 className="mt-1 size-6 shrink-0 text-fg-brand-primary" />
+                            <div>
+                                <h2 className="text-lg font-semibold text-primary">Contacter le barbier</h2>
+                                <p className="mt-1 text-sm text-tertiary">
+                                    Une question avant de réserver ? Écrivez ou appelez directement {profile.display_name}.
+                                </p>
+                                <div className="mt-4">
+                                    <ContactButtons whatsappUrl={profile.whatsapp_url} callUrl={profile.call_url} />
+                                </div>
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    </Card>
                 </section>
-            </main>
-
-            <footer className="border-t border-secondary py-8 text-center text-sm text-quaternary">
-                © {new Date().getFullYear()} {siteConfig.name}
-            </footer>
-        </div>
+            )}
+        </PublicShell>
     );
 }

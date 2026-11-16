@@ -16,7 +16,7 @@ export function AppHeader({ onMenu }: { onMenu: () => void }) {
                 type="button"
                 onClick={onMenu}
                 className="rounded-md p-2 text-fg-quaternary hover:bg-primary_hover md:hidden"
-                aria-label="Open menu"
+                aria-label="Ouvrir le menu"
             >
                 <Menu01 className="size-5" />
             </button>
@@ -31,7 +31,7 @@ export function AppHeader({ onMenu }: { onMenu: () => void }) {
                 </span>
                 <span className="hidden text-sm sm:block">
                     <span className="block font-semibold text-primary">{name}</span>
-                    <span className="block text-xs text-tertiary">{isAdmin ? "Administrator" : "User"}</span>
+                    <span className="block text-xs text-tertiary">{isAdmin ? "Barbier" : "Client"}</span>
                 </span>
             </Link>
         </header>

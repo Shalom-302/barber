@@ -39,7 +39,7 @@ export function usePaged<T>(
 export function DataTable<T extends { id: number }>({
     columns,
     paged,
-    empty = "Nothing to show yet.",
+    empty = "Rien à afficher.",
 }: {
     columns: Column<T>[];
     paged: ReturnType<typeof usePaged<T>>;
@@ -72,7 +72,7 @@ export function DataTable<T extends { id: number }>({
                         ) : loading && !data ? (
                             <tr>
                                 <td colSpan={columns.length} className="px-4 py-8 text-center text-tertiary">
-                                    Loading…
+                                    Chargement…
                                 </td>
                             </tr>
                         ) : rows.length === 0 ? (
@@ -97,7 +97,7 @@ export function DataTable<T extends { id: number }>({
             </div>
             <div className="flex items-center justify-between border-t border-secondary px-4 py-3 text-sm text-tertiary">
                 <span>
-                    Page {page} / {totalPages} · {data?.total ?? 0} total
+                    Page {page} / {totalPages} · {data?.total ?? 0} au total
                 </span>
                 <div className="flex gap-2">
                     <Button
@@ -106,7 +106,7 @@ export function DataTable<T extends { id: number }>({
                         isDisabled={page <= 1 || loading}
                         onClick={() => setPage(page - 1)}
                     >
-                        Previous
+                        Précédent
                     </Button>
                     <Button
                         variant="secondary"
@@ -114,7 +114,7 @@ export function DataTable<T extends { id: number }>({
                         isDisabled={page >= totalPages || loading}
                         onClick={() => setPage(page + 1)}
                     >
-                        Next
+                        Suivant
                     </Button>
                 </div>
             </div>
@@ -125,5 +125,5 @@ export function DataTable<T extends { id: number }>({
 export function formatDate(value?: string | null): string {
     if (!value) return "—";
     const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+    return Number.isNaN(d.getTime()) ? value : d.toLocaleString("fr-FR", { timeZone: "Africa/Abidjan" });
 }

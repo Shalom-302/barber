@@ -1,63 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle } from "@untitled-ui/icons-react";
+import { AdminBookingCard } from "@/components/barber/admin-booking-card";
+import { Card, Empty, SectionTitle, Spinner } from "@/components/barber/ui";
 import { PageHeader } from "@/components/layout/app-shell";
-import { siteConfig } from "@/config/site";
-import { adminApi } from "@/lib/api/services";
+import { Button } from "@/components/ui/button";
+import { barberAdminApi, type Overview } from "@/lib/api/barber";
+import { errorMessage } from "@/lib/api/client";
+import { STATUS_LABEL, type BookingStatus } from "@/lib/barber/format";
+
+const COUNTERS: BookingStatus[] = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "REJECTED"];
 
 export default function AdminOverviewPage() {
-    const [counts, setCounts] = useState<{ users?: number; roles?: number; logins?: number }>({});
+    const [data, setData] = useState<Overview | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const one = { page: 1, size: 1 };
-        Promise.allSettled([adminApi.users(one), adminApi.roles(one), adminApi.loginLogs(one)]).then(
-            ([u, r, l]) =>
-                setCounts({
-                    users: u.status === "fulfilled" ? u.value.total : undefined,
-                    roles: r.status === "fulfilled" ? r.value.total : undefined,
-                    logins: l.status === "fulfilled" ? l.value.total : undefined,
-                })
-        );
+    const load = useCallback(() => {
+        barberAdminApi.overview().then(setData).catch(e => setError(errorMessage(e)));
     }, []);
 
-    const cards = [
-        { label: "Users", value: counts.users, href: "/admin/users" },
-        { label: "Roles", value: counts.roles, href: "/admin/roles" },
-        { label: "Logins recorded", value: counts.logins, href: "/admin/logs" },
-    ];
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const changed = () => load();
 
     return (
         <>
             <PageHeader
-                title="Administration"
-                description={`Manage ${siteConfig.name}: users, roles and activity.`}
+                title="Tableau de bord"
+                description="Vos rendez-vous du jour et les demandes à traiter."
+                action={
+                    <Button asChild size="md" variant="secondary">
+                        <Link href="/admin/reservations">Toutes les réservations</Link>
+                    </Button>
+                }
             />
-            <div className="grid gap-4 sm:grid-cols-3">
-                {cards.map(c => (
-                    <Link
-                        key={c.href}
-                        href={c.href}
-                        className="rounded-xl border border-secondary bg-primary p-5 shadow-xs transition-colors hover:bg-primary_hover"
-                    >
-                        <p className="text-sm font-medium text-tertiary">{c.label}</p>
-                        <p className="mt-2 text-display-sm font-semibold text-primary">
-                            {c.value ?? "—"}
-                        </p>
-                    </Link>
-                ))}
-            </div>
-            <p className="mt-8 text-sm text-tertiary">
-                API documentation (dev):{" "}
-                <a
-                    href="/admin/api/v1/docs"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-brand-secondary"
-                >
-                    /admin/api/v1/docs
-                </a>
-            </p>
+            {error && <p className="text-sm text-error-primary">{error}</p>}
+            {!data && !error && <Spinner />}
+            {data && (
+                <div className="space-y-8">
+                    {data.failed_notifications > 0 && (
+                        <Link
+                            href="/admin/notifications?status=failed"
+                            className="flex items-center gap-3 rounded-xl bg-error-primary p-4 text-sm font-medium text-error-primary"
+                        >
+                            <AlertTriangle className="size-5 shrink-0" />
+                            {data.failed_notifications} notification(s) WhatsApp n&apos;ont pas pu être envoyées.
+                            Voir et renvoyer →
+                        </Link>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        {COUNTERS.map(s => (
+                            <Card key={s} className="p-4!">
+                                <p className="text-xs font-medium text-tertiary">{STATUS_LABEL[s]}</p>
+                                <p className="mt-1 text-display-xs font-semibold text-primary">{data.counts[s] ?? 0}</p>
+                            </Card>
+                        ))}
+                    </div>
+
+                    <section>
+                        <SectionTitle>Demandes en attente ({data.pending.length})</SectionTitle>
+                        {data.pending.length === 0 ? (
+                            <Empty>Aucune demande en attente.</Empty>
+                        ) : (
+                            <div className="grid gap-3 lg:grid-cols-2">
+                                {data.pending.map(b => (
+                                    <AdminBookingCard key={b.id} booking={b} onChanged={changed} compact />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    <section>
+                        <SectionTitle>Aujourd&apos;hui ({data.today.length})</SectionTitle>
+                        {data.today.length === 0 ? (
+                            <Empty>Aucun rendez-vous confirmé aujourd&apos;hui.</Empty>
+                        ) : (
+                            <div className="grid gap-3 lg:grid-cols-2">
+                                {data.today.map(b => (
+                                    <AdminBookingCard key={b.id} booking={b} onChanged={changed} compact />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            )}
         </>
     );
 }

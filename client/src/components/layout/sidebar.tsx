@@ -28,7 +28,7 @@ function NavSection({
             {items.map(item => {
                 const active =
                     pathname === item.href ||
-                    (item.href !== "/admin" && pathname.startsWith(item.href + "/"));
+                    (item.href !== "/admin" && item.href !== "/" && pathname.startsWith(item.href + "/"));
                 return (
                     <Link
                         key={item.href}
@@ -75,12 +75,20 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                 <nav className="flex-1 overflow-y-auto">
                     <NavSection items={siteConfig.nav.user} pathname={pathname} onNavigate={onClose} />
                     {isAdmin && (
-                        <NavSection
-                            title="Administration"
-                            items={siteConfig.nav.admin}
-                            pathname={pathname}
-                            onNavigate={onClose}
-                        />
+                        <>
+                            <NavSection
+                                title="Barbier"
+                                items={siteConfig.nav.admin}
+                                pathname={pathname}
+                                onNavigate={onClose}
+                            />
+                            <NavSection
+                                title="Système"
+                                items={siteConfig.nav.system}
+                                pathname={pathname}
+                                onNavigate={onClose}
+                            />
+                        </>
                     )}
                 </nav>
                 <button
@@ -89,7 +97,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                     className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-secondary hover:bg-primary_hover"
                 >
                     <LogOut01 className="size-5 text-fg-quaternary" />
-                    Log out
+                    Se déconnecter
                 </button>
                 <p className="px-3 pt-4 text-xs text-quaternary">
                     © {new Date().getFullYear()} {siteConfig.name}
